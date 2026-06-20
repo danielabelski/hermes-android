@@ -62,6 +62,7 @@ import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import com.hermeswebui.android.core.security.NavigationDecision
+import com.hermeswebui.android.core.security.UrlOrigins
 import com.hermeswebui.android.core.security.UrlPolicy
 import com.hermeswebui.android.data.SettingsRepository
 import com.hermeswebui.android.domain.ServerUrlValidator
@@ -144,14 +145,14 @@ class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
     private lateinit var settingsRepository: SettingsRepository
 
-    private var allowedHosts: Set<String> = emptySet()
+    private var urlPolicy = UrlPolicy(emptySet())
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private var pendingAudioPermissionRequest: PermissionRequest? = null
     private var microphoneFallbackScriptHandler: ScriptHandler? = null
     private val serverUrlValidator = ServerUrlValidator()
 
     private val filePickerLauncher = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        filePathCallback?.onReceiveValue(uris.toTypedArray())
+        filePathCallback?.onReceiveValue(uris.takeIf { it.isNotEmpty() }?.toTypedArray())
         filePathCallback = null
         viewModel.dismissShareBanner()
     }
@@ -179,7 +180,7 @@ class MainActivity : ComponentActivity() {
             this,
             MainViewModelFactory(settingsRepository, defaultUrl, defaultDashboardUrl)
         )[MainViewModel::class.java]
-        allowedHosts = viewModel.uiState.value.settings.allowedHosts
+        urlPolicy = UrlPolicy(viewModel.uiState.value.settings.allowedHosts)
 
         val isDebuggable = (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
         WebView.setWebContentsDebuggingEnabled(isDebuggable)
@@ -237,7 +238,7 @@ class MainActivity : ComponentActivity() {
             return true
         }
         val sessionUrl = "${serverUrl.trimEnd('/')}/${Uri.encode(sessionId)}"
-        if (!UrlPolicy(viewModel.uiState.value.settings.allowedHosts).isAllowed(sessionUrl)) {
+        if (!urlPolicy.isAllowed(sessionUrl)) {
             Toast.makeText(this, "Session URL is not allowlisted", Toast.LENGTH_LONG).show()
             return true
         }
@@ -401,7 +402,7 @@ class MainActivity : ComponentActivity() {
                         openDashboardInCustomTab(target)
                         return true
                     }
-                    return when (UrlPolicy(allowedHosts).navigationDecision(target)) {
+                    return when (urlPolicy.navigationDecision(target)) {
                         NavigationDecision.ALLOW_IN_WEBVIEW -> false
                         NavigationDecision.OPEN_IN_EXTERNAL_BROWSER -> {
                             openInExternalBrowser(target)
@@ -479,7 +480,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun isTrustedPermissionOrigin(origin: Uri?): Boolean {
-        return origin != null && UrlPolicy(allowedHosts).isAllowed(origin.toString())
+        return origin != null && urlPolicy.isAllowed(origin.toString())
     }
 
     private fun disableWebViewDarkening(settings: WebSettings) {
@@ -508,7 +509,7 @@ class MainActivity : ComponentActivity() {
 
     private fun installHermesWebUiDocumentStartFixes(view: WebView, serverUrl: String) {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) return
-        val originRule = buildDocumentStartOriginRule(serverUrl) ?: return
+        val originRule = UrlOrigins.documentStartOriginRule(serverUrl) ?: return
 
         microphoneFallbackScriptHandler?.remove()
         microphoneFallbackScriptHandler = runCatching {
@@ -518,19 +519,6 @@ class MainActivity : ComponentActivity() {
                 setOf(originRule)
             )
         }.getOrNull()
-    }
-
-    private fun buildDocumentStartOriginRule(serverUrl: String): String? {
-        val uri = runCatching { serverUrl.toUri() }.getOrNull() ?: return null
-        val scheme = uri.scheme?.lowercase()?.takeIf { it == "https" } ?: return null
-        val host = uri.host?.lowercase()?.takeIf { it.isNotBlank() } ?: return null
-        val hostRule = if (host.contains(":") && !host.startsWith("[")) {
-            "[$host]"
-        } else {
-            host
-        }
-        val portRule = if (uri.port != -1) ":${uri.port}" else ""
-        return "$scheme://$hostRule$portRule"
     }
 
     private fun buildHermesDashboardConfigScript(dashboardUrl: String): String {
@@ -625,16 +613,16 @@ class MainActivity : ComponentActivity() {
 
     private fun matchesConfiguredWebUiRoute(url: String?): Boolean {
         val settings = viewModel.uiState.value.settings
-        return hasSameOriginAs(url, settings.serverUrl) && !matchesConfiguredDashboardRoute(url)
+        return UrlOrigins.hasSameOrigin(url, settings.serverUrl) && !matchesConfiguredDashboardRoute(url)
     }
 
     private fun matchesConfiguredDashboardRoute(url: String?): Boolean {
         val dashboardUrl = viewModel.uiState.value.settings.dashboardUrl
         if (url.isNullOrBlank() || dashboardUrl.isBlank()) return false
-        if (!hasSameOriginAs(url, dashboardUrl)) return false
+        if (!UrlOrigins.hasSameOrigin(url, dashboardUrl)) return false
 
-        val targetPath = runCatching { url.toUri().path.orEmpty().trimEnd('/') }.getOrDefault("")
-        val dashboardPath = runCatching { dashboardUrl.toUri().path.orEmpty().trimEnd('/') }.getOrDefault("")
+        val targetPath = UrlOrigins.normalizedPath(url)
+        val dashboardPath = UrlOrigins.normalizedPath(dashboardUrl)
         if (dashboardPath.isBlank()) return true
         return targetPath == dashboardPath || targetPath.startsWith("$dashboardPath/")
     }
@@ -644,50 +632,32 @@ class MainActivity : ComponentActivity() {
             openDashboardInCustomTab(url)
             return
         }
-        when (UrlPolicy(allowedHosts).navigationDecision(url)) {
+        when (urlPolicy.navigationDecision(url)) {
             NavigationDecision.ALLOW_IN_WEBVIEW -> webView.loadUrl(url)
             NavigationDecision.OPEN_IN_EXTERNAL_BROWSER -> openInExternalBrowser(url)
             NavigationDecision.BLOCK -> Unit
         }
     }
 
-    private fun hasSameOriginAs(url: String?, baseUrl: String): Boolean {
-        if (url.isNullOrBlank() || baseUrl.isBlank()) return false
-        val target = runCatching { url.toUri() }.getOrNull() ?: return false
-        val base = runCatching { baseUrl.toUri() }.getOrNull() ?: return false
-        val targetScheme = target.scheme?.lowercase() ?: return false
-        val baseScheme = base.scheme?.lowercase() ?: return false
-        val targetHost = target.host?.lowercase() ?: return false
-        val baseHost = base.host?.lowercase() ?: return false
-        return targetScheme == baseScheme &&
-            targetHost == baseHost &&
-            effectivePort(target) == effectivePort(base)
-    }
-
-    private fun effectivePort(uri: Uri): Int {
-        if (uri.port != -1) return uri.port
-        return when (uri.scheme?.lowercase()) {
-            "https" -> 443
-            "http" -> 80
-            else -> -1
-        }
-    }
-
     private fun buildDownloadListener(context: Context): DownloadListener {
         return DownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
-            val policy = UrlPolicy(allowedHosts)
-            if (!policy.isAllowed(url)) {
+            if (!urlPolicy.isAllowed(url)) {
                 Toast.makeText(context, "Blocked download from non-allowlisted domain", Toast.LENGTH_LONG).show()
                 return@DownloadListener
             }
+            val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
             val request = DownloadManager.Request(Uri.parse(url)).apply {
                 setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                setTitle(URLUtil.guessFileName(url, contentDisposition, mimeType))
+                setTitle(fileName)
                 setDescription("Downloading from Hermes")
                 setAllowedOverMetered(true)
-                addRequestHeader("Cookie", CookieManager.getInstance().getCookie(url))
-                addRequestHeader("User-Agent", userAgent)
-                setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, URLUtil.guessFileName(url, contentDisposition, mimeType))
+                CookieManager.getInstance().getCookie(url)?.takeIf { it.isNotBlank() }?.let {
+                    addRequestHeader("Cookie", it)
+                }
+                userAgent?.takeIf { it.isNotBlank() }?.let {
+                    addRequestHeader("User-Agent", it)
+                }
+                setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
             }
             val manager = context.getSystemService(DownloadManager::class.java)
             manager.enqueue(request)
@@ -706,7 +676,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         viewModel.saveAppUrls(serverUrl, dashboardUrl)
-        allowedHosts = viewModel.uiState.value.settings.allowedHosts
+        urlPolicy = UrlPolicy(viewModel.uiState.value.settings.allowedHosts)
         installHermesWebUiDocumentStartFixes(webView, serverUrl)
         webView.loadUrl(serverUrl)
     }

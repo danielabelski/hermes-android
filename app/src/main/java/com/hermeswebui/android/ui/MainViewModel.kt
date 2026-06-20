@@ -78,12 +78,6 @@ class MainViewModel(
         _uiState.update { it.copy(pendingShareBanner = banner) }
     }
 
-    fun consumeSharedText(): String? {
-        val value = sharedText
-        sharedText = null
-        return value
-    }
-
     fun consumeSharedFileUris(): List<String> {
         val staged = sharedFileUris
         sharedFileUris = emptyList()

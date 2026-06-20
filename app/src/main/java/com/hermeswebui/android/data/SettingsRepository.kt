@@ -1,9 +1,9 @@
 package com.hermeswebui.android.data
 
 import android.content.Context
-import androidx.core.net.toUri
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.hermeswebui.android.core.security.UrlOrigins
 
 class SettingsRepository(context: Context) {
     private val sharedPreferences = EncryptedSharedPreferences.create(
@@ -22,10 +22,9 @@ class SettingsRepository(context: Context) {
             .getString(KEY_DASHBOARD_URL, defaultDashboardUrl)
             ?.trim()
             .orEmpty()
-        val dashboardUrl = normalizeDashboardOriginUrl(rawDashboardUrl)
+        val dashboardUrl = UrlOrigins.normalizeOriginUrl(rawDashboardUrl)
         val parsedHosts = setOf(serverUrl, dashboardUrl)
-            .mapNotNull { url -> runCatching { url.toUri().host.orEmpty().lowercase() }.getOrNull() }
-            .filter { it.isNotBlank() }
+            .mapNotNull(UrlOrigins::hostFrom)
             .toSet()
         val hostCsv = sharedPreferences.getString(KEY_ALLOWED_HOSTS, parsedHosts.joinToString(",")).orEmpty()
         val isConfigured = sharedPreferences.getBoolean(KEY_IS_CONFIGURED, false)
@@ -43,10 +42,9 @@ class SettingsRepository(context: Context) {
     }
 
     fun saveAppUrls(serverUrl: String, dashboardUrl: String) {
-        val normalizedDashboardUrl = normalizeDashboardOriginUrl(dashboardUrl)
+        val normalizedDashboardUrl = UrlOrigins.normalizeOriginUrl(dashboardUrl)
         val hosts = setOf(serverUrl, normalizedDashboardUrl)
-            .mapNotNull { url -> runCatching { url.toUri().host.orEmpty().lowercase() }.getOrNull() }
-            .filter { it.isNotBlank() }
+            .mapNotNull(UrlOrigins::hostFrom)
             .toSet()
         sharedPreferences.edit()
             .putString(KEY_SERVER_URL, serverUrl)
@@ -65,20 +63,6 @@ class SettingsRepository(context: Context) {
     }
 
     fun getLastLoadedUrl(): String? = sharedPreferences.getString(KEY_LAST_URL, null)
-
-    private fun normalizeDashboardOriginUrl(url: String): String {
-        val trimmed = url.trim()
-        val parsed = runCatching { trimmed.toUri() }.getOrNull() ?: return trimmed
-        if (parsed.scheme.isNullOrBlank() || parsed.host.isNullOrBlank()) return trimmed
-
-        return parsed.buildUpon()
-            .path("")
-            .query(null)
-            .fragment(null)
-            .build()
-            .toString()
-            .trimEnd('/')
-    }
 
     companion object {
         private const val FILE_NAME = "hermes_secure_prefs"
