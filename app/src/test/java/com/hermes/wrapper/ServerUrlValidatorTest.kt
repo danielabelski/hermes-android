@@ -1,0 +1,29 @@
+package com.hermes.wrapper
+
+import com.google.common.truth.Truth.assertThat
+import com.hermes.wrapper.domain.ServerUrlValidator
+import org.junit.Test
+
+class ServerUrlValidatorTest {
+    private val validator = ServerUrlValidator()
+
+    @Test
+    fun `accepts valid https host`() {
+        assertThat(validator.isValid("https://hermes.example.com")).isTrue()
+    }
+
+    @Test
+    fun `rejects valid http host`() {
+        assertThat(validator.isValid("http://hermes.example.com")).isFalse()
+    }
+
+    @Test
+    fun `rejects missing scheme`() {
+        assertThat(validator.isValid("hermes.example.com")).isFalse()
+    }
+
+    @Test
+    fun `rejects unsupported scheme`() {
+        assertThat(validator.isValid("ftp://hermes.example.com")).isFalse()
+    }
+}
