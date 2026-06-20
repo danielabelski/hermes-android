@@ -17,7 +17,7 @@
 | Android sharing | Done - share-to-app intake for text and files |
 | Files | Done - WebView upload/download integration |
 | Local settings | Done - encrypted settings storage |
-| Native distribution polish | Partial - app identity exists; package ID and release signing decisions still open |
+| Native distribution polish | Partial - app identity exists; release signing workflow still open |
 | Phase 2 native features | Planned - deep links, notifications, biometrics, profiles, camera |
 
 ---
@@ -63,7 +63,7 @@
 - [ ] Expanded native settings for theme, notifications, and profiles
 - [ ] Drawer destinations for files, kanban, sessions, and status
 - [ ] Instrumentation tests for WebView navigation and intent flows
-- [ ] Final package/application ID decision before first public release
+- [x] Final package/application ID decision before first public release
 - [ ] Release signing automation docs and snippets
 
 ---
@@ -80,16 +80,14 @@
 | A-010 | P2 | Todo | Tests | Add instrumentation tests for navigation, share, and deep links | Emulator-ready where practical |
 | A-011 | P3 | Todo | Release | Add release signing automation docs and snippets | Keep keystore secrets out of repo |
 | A-013 | P2 | Todo | Navigation | Add more drawer destinations | Wait for stable WebUI routes for files, kanban, sessions, status |
-| A-014 | P1 | Todo | Release | Finalize package ID and namespace | Decide before first public release; current value is `com.hermes.wrapper` |
 
 Recommended next order:
 
-1. A-014 Package ID decision
-2. A-005 Deep links
-3. A-009 Server profile list
-4. A-007 Biometric lock
-5. A-006 Push notifications
-6. A-008 Attachment and camera enhancements
+1. A-005 Deep links
+2. A-009 Server profile list
+3. A-007 Biometric lock
+4. A-006 Push notifications
+5. A-008 Attachment and camera enhancements
 
 ---
 
@@ -105,6 +103,7 @@ Recommended next order:
 | DOC-001 | 2026-06-20 | Docs | Cleaned README and created this roadmap as the progress and wishlist tracker |
 | BRAND-001 | 2026-06-20 | Branding | Renamed APK output to `hermes-android`; replaced placeholder icon with Hermes WebUI caduceus (vector + density PNGs); icon background aligned to WebUI dark `#1a1a1a` |
 | COMPAT-001 | 2026-06-20 | Android compatibility | Guarded share-intent parcelable parsing across pre- and post-Android 13 APIs |
+| A-014 | 2026-06-20 | Release | Finalized package ID and namespace as `com.hermeswebui.android` before first public release |
 
 ---
 

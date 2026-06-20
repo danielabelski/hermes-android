@@ -10,11 +10,11 @@ base {
 }
 
 android {
-    namespace = "com.hermes.wrapper"
+    namespace = "com.hermeswebui.android"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.hermes.wrapper"
+        applicationId = "com.hermeswebui.android"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

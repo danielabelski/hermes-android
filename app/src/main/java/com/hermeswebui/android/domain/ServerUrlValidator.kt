@@ -1,4 +1,4 @@
-package com.hermes.wrapper.domain
+package com.hermeswebui.android.domain
 
 import java.net.URI
 

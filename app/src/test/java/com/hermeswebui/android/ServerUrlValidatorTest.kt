@@ -1,7 +1,7 @@
-package com.hermes.wrapper
+package com.hermeswebui.android
 
 import com.google.common.truth.Truth.assertThat
-import com.hermes.wrapper.domain.ServerUrlValidator
+import com.hermeswebui.android.domain.ServerUrlValidator
 import org.junit.Test
 
 class ServerUrlValidatorTest {

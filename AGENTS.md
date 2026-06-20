@@ -15,7 +15,7 @@ Before making changes, read:
 4. `AGENTS.md`
 
 For implementation work, also inspect the relevant source files under
-`app/src/main/java/com/hermes/wrapper/`.
+`app/src/main/java/com/hermeswebui/android/`.
 
 Useful entry points:
 
@@ -37,8 +37,8 @@ This repository is the standalone Android app.
 - Keep the Android app a thin, secure companion to Hermes WebUI.
 - Prefer incremental changes over broad rewrites.
 - Treat `applicationId` and `namespace` as release-critical identity. Do not
-  change either without an explicit user decision, and finalize them before the
-  first public release.
+  change either without an explicit user decision. The finalized pre-release
+  identity is `com.hermeswebui.android`.
 
 ## Product direction
 

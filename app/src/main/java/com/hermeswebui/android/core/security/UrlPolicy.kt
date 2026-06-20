@@ -1,4 +1,4 @@
-package com.hermes.wrapper.core.security
+package com.hermeswebui.android.core.security
 
 import java.net.URI
 import java.util.Locale

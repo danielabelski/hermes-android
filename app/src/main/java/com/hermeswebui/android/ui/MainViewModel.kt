@@ -1,8 +1,8 @@
-package com.hermes.wrapper.ui
+package com.hermeswebui.android.ui
 
 import androidx.lifecycle.ViewModel
-import com.hermes.wrapper.data.SettingsRepository
-import com.hermes.wrapper.data.SharePayload
+import com.hermeswebui.android.data.SettingsRepository
+import com.hermeswebui.android.data.SharePayload
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

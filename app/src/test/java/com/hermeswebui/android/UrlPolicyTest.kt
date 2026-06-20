@@ -1,8 +1,8 @@
-package com.hermes.wrapper
+package com.hermeswebui.android
 
 import com.google.common.truth.Truth.assertThat
-import com.hermes.wrapper.core.security.NavigationDecision
-import com.hermes.wrapper.core.security.UrlPolicy
+import com.hermeswebui.android.core.security.NavigationDecision
+import com.hermeswebui.android.core.security.UrlPolicy
 import org.junit.Test
 
 class UrlPolicyTest {

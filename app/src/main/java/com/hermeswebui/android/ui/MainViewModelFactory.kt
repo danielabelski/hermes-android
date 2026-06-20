@@ -1,8 +1,8 @@
-package com.hermes.wrapper.ui
+package com.hermeswebui.android.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.hermes.wrapper.data.SettingsRepository
+import com.hermeswebui.android.data.SettingsRepository
 
 class MainViewModelFactory(
     private val settingsRepository: SettingsRepository,

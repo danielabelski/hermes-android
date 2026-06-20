@@ -1,4 +1,4 @@
-package com.hermes.wrapper
+package com.hermeswebui.android
 
 import android.annotation.SuppressLint
 import android.app.DownloadManager
@@ -59,16 +59,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.ViewModelProvider
-import com.hermes.wrapper.core.security.NavigationDecision
-import com.hermes.wrapper.core.security.UrlPolicy
-import com.hermes.wrapper.data.SettingsRepository
-import com.hermes.wrapper.domain.ServerUrlValidator
-import com.hermes.wrapper.domain.ShareIntentParser
-import com.hermes.wrapper.ui.MainViewModel
-import com.hermes.wrapper.ui.MainViewModelFactory
-import com.hermes.wrapper.ui.MainSurface
-import com.hermes.wrapper.ui.settings.SettingsBottomSheet
-import com.hermes.wrapper.ui.web.WebShell
+import com.hermeswebui.android.core.security.NavigationDecision
+import com.hermeswebui.android.core.security.UrlPolicy
+import com.hermeswebui.android.data.SettingsRepository
+import com.hermeswebui.android.domain.ServerUrlValidator
+import com.hermeswebui.android.domain.ShareIntentParser
+import com.hermeswebui.android.ui.MainViewModel
+import com.hermeswebui.android.ui.MainViewModelFactory
+import com.hermeswebui.android.ui.MainSurface
+import com.hermeswebui.android.ui.settings.SettingsBottomSheet
+import com.hermeswebui.android.ui.web.WebShell
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)

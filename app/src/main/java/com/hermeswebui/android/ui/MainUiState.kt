@@ -1,6 +1,6 @@
-package com.hermes.wrapper.ui
+package com.hermeswebui.android.ui
 
-import com.hermes.wrapper.data.AppSettings
+import com.hermeswebui.android.data.AppSettings
 
 enum class MainSurface {
     WEB_UI,

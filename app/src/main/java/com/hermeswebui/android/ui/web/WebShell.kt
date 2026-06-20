@@ -1,4 +1,4 @@
-package com.hermes.wrapper.ui.web
+package com.hermeswebui.android.ui.web
 
 import android.webkit.WebView
 import androidx.compose.foundation.background

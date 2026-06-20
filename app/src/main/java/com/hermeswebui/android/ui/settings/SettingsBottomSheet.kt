@@ -1,4 +1,4 @@
-package com.hermes.wrapper.ui.settings
+package com.hermeswebui.android.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

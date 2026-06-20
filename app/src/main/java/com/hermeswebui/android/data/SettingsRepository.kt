@@ -1,4 +1,4 @@
-package com.hermes.wrapper.data
+package com.hermeswebui.android.data
 
 import android.content.Context
 import androidx.core.net.toUri

@@ -111,12 +111,12 @@ Optional checks:
 
 | Layer | Files | Purpose |
 |---|---|---|
-| Platform boundary | `app/src/main/java/com/hermes/wrapper/MainActivity.kt` | WebView setup, intents, file chooser, downloads, navigation hooks |
-| Security | `app/src/main/java/com/hermes/wrapper/core/security/UrlPolicy.kt` | HTTPS and allowlist decisions |
-| Data | `app/src/main/java/com/hermes/wrapper/data/` | Encrypted app settings and staged share payloads |
-| Domain | `app/src/main/java/com/hermes/wrapper/domain/` | URL validation and Android share intent parsing |
-| UI | `app/src/main/java/com/hermes/wrapper/ui/` | Compose screens and ViewModel state |
-| Tests | `app/src/test/java/com/hermes/wrapper/` | Unit coverage for URL and validation logic |
+| Platform boundary | `app/src/main/java/com/hermeswebui/android/MainActivity.kt` | WebView setup, intents, file chooser, downloads, navigation hooks |
+| Security | `app/src/main/java/com/hermeswebui/android/core/security/UrlPolicy.kt` | HTTPS and allowlist decisions |
+| Data | `app/src/main/java/com/hermeswebui/android/data/` | Encrypted app settings and staged share payloads |
+| Domain | `app/src/main/java/com/hermeswebui/android/domain/` | URL validation and Android share intent parsing |
+| UI | `app/src/main/java/com/hermeswebui/android/ui/` | Compose screens and ViewModel state |
+| Tests | `app/src/test/java/com/hermeswebui/android/` | Unit coverage for URL and validation logic |
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for the design notes and extension
 points.
