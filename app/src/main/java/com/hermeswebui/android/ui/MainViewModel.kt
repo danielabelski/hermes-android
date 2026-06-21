@@ -3,7 +3,7 @@ package com.hermeswebui.android.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermeswebui.android.data.HermesApiClient
-import com.hermeswebui.android.data.SettingsRepository
+import com.hermeswebui.android.data.SettingsStore
 import com.hermeswebui.android.data.SharePayload
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class MainViewModel(
-    private val settingsRepository: SettingsRepository,
+    private val settingsRepository: SettingsStore,
     private val defaultUrl: String,
     private val defaultDashboardUrl: String
 ) : ViewModel() {
@@ -23,8 +23,10 @@ class MainViewModel(
 
     private var sharedText: String? = null
     private var sharedFileUris: List<String> = emptyList()
+    private var currentLoadHasMainFrameError = false
 
     fun onPageStarted(url: String?) {
+        currentLoadHasMainFrameError = false
         _uiState.update {
             it.copy(
                 isLoading = true,
@@ -35,15 +37,27 @@ class MainViewModel(
         }
     }
 
+    fun onPageCommitVisible(url: String?) {
+        if (currentLoadHasMainFrameError) return
+        val next = url ?: _uiState.value.currentUrl
+        _uiState.update {
+            it.copy(
+                hasLoadedContent = true,
+                currentUrl = next
+            )
+        }
+    }
+
     fun onPageFinished(url: String?, rememberLastUrl: Boolean = true) {
         val next = url ?: _uiState.value.currentUrl
-        if (rememberLastUrl) {
+        if (!currentLoadHasMainFrameError && rememberLastUrl) {
             settingsRepository.saveLastLoadedUrl(next)
         }
         _uiState.update { it.copy(isLoading = false, currentUrl = next) }
     }
 
     fun onPageError(message: String, isOffline: Boolean) {
+        currentLoadHasMainFrameError = true
         _uiState.update {
             it.copy(
                 isLoading = false,
@@ -103,6 +117,8 @@ class MainViewModel(
             it.copy(
                 settings = refreshed,
                 currentUrl = refreshed.serverUrl,
+                isLoading = true,
+                hasLoadedContent = false,
                 isSettingsVisible = false,
                 errorMessage = null,
                 isOffline = false
@@ -112,5 +128,14 @@ class MainViewModel(
 
     fun resetSession() {
         settingsRepository.clearWebSession()
+        _uiState.update {
+            it.copy(
+                isLoading = true,
+                hasLoadedContent = false,
+                errorMessage = null,
+                isOffline = false,
+                currentUrl = it.settings.serverUrl
+            )
+        }
     }
 }

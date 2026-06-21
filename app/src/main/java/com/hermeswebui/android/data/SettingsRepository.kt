@@ -6,7 +6,8 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.hermeswebui.android.core.security.UrlOrigins
 
-class SettingsRepository(context: Context) {
+@Suppress("DEPRECATION")
+class SettingsRepository(context: Context) : SettingsStore {
     private val sharedPreferences = EncryptedSharedPreferences.create(
         context,
         FILE_NAME,
@@ -17,7 +18,7 @@ class SettingsRepository(context: Context) {
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
 
-    fun getSettings(defaultUrl: String, defaultDashboardUrl: String): AppSettings {
+    override fun getSettings(defaultUrl: String, defaultDashboardUrl: String): AppSettings {
         val serverUrl = sharedPreferences.getString(KEY_SERVER_URL, defaultUrl)?.trim().orEmpty()
         val rawDashboardUrl = sharedPreferences
             .getString(KEY_DASHBOARD_URL, defaultDashboardUrl)
@@ -42,7 +43,7 @@ class SettingsRepository(context: Context) {
         )
     }
 
-    fun saveAppUrls(serverUrl: String, dashboardUrl: String) {
+    override fun saveAppUrls(serverUrl: String, dashboardUrl: String) {
         val normalizedDashboardUrl = UrlOrigins.normalizeOriginUrl(dashboardUrl)
         val hosts = setOf(serverUrl, normalizedDashboardUrl)
             .mapNotNull(UrlOrigins::hostFrom)
@@ -55,7 +56,7 @@ class SettingsRepository(context: Context) {
         }
     }
 
-    fun clearWebSession() {
+    override fun clearWebSession() {
         sharedPreferences.edit { remove(KEY_LAST_URL) }
     }
 
@@ -67,7 +68,7 @@ class SettingsRepository(context: Context) {
         sharedPreferences.edit { putBoolean(KEY_NOTIFICATION_PERMISSION_REQUESTED, true) }
     }
 
-    fun saveLastLoadedUrl(url: String) {
+    override fun saveLastLoadedUrl(url: String) {
         sharedPreferences.edit { putString(KEY_LAST_URL, url) }
     }
 

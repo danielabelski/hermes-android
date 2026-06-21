@@ -2,10 +2,10 @@ package com.hermeswebui.android.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.hermeswebui.android.data.SettingsRepository
+import com.hermeswebui.android.data.SettingsStore
 
 class MainViewModelFactory(
-    private val settingsRepository: SettingsRepository,
+    private val settingsRepository: SettingsStore,
     private val defaultUrl: String,
     private val defaultDashboardUrl: String
 ) : ViewModelProvider.Factory {

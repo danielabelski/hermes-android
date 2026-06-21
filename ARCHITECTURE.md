@@ -18,7 +18,7 @@
 ## Runtime flow
 
 1. App starts, loads encrypted WebUI settings and the stored/default dashboard origin URL (`SettingsRepository`).
-2. WebView boots with hardened configuration.
+2. WebView boots with hardened configuration, default HTTP cache behavior, DOM storage, and service-worker cache settings for WebUI-managed assets.
 3. The Compose root fills the full window background, then applies `WindowInsets.safeDrawing` around the WebView shell and native snackbar so Android 15 edge-to-edge enforcement does not put content under status or navigation bars.
 4. Android WebView compatibility shims stay scoped to Hermes WebUI. Android injects a document-start microphone fallback flag for the configured Hermes WebUI origin so WebUI voice input uses its MediaRecorder path instead of Android WebView's unreliable Web Speech API path. The official dashboard is not rendered in an app WebView.
 5. On the Hermes WebUI route, Android seeds the WebUI `/api/dashboard/config` origin URL when WebUI has no dashboard URL and Android has one stored/defaulted. Dashboard URLs are normalized to their origin before Android stores or matches them. WebUI then owns rendering and behavior for the Official Hermes Dashboard link in its rail/sidebar.
@@ -27,7 +27,7 @@
 8. `UrlPolicy` enforces supported web schemes (`http`/`https`) + domain allowlist for every navigation.
 9. WebView microphone permission requests are accepted only for audio capture on trusted Hermes pages. Android prefers explicit allowlisted HTTP/HTTPS origins, normalizes edge-case origin formatting, and allows null/opaque-origin requests only when the active main-frame URL is the configured Hermes WebUI route. Android runtime microphone permission is requested on demand before granting the WebView request.
 10. WebUI browser notifications are backed by Android notifications. Android injects a scoped `Notification`/`ServiceWorkerRegistration.showNotification` compatibility facade for the configured Hermes WebUI origin, requests `POST_NOTIFICATIONS` on Android 13+, publishes through a native notification channel, and accepts notification tap routes only when they target an allowlisted Hermes WebUI URL.
-11. `MainViewModel` drives loading/error/offline/share UI state.
+11. `MainViewModel` drives loading/error/offline/share UI state. After the first successful page render, reloads and navigations keep the existing WebView content visible so cached pages do not flicker behind a full-screen native loading veil.
 12. Share intents are parsed in `domain`, staged in ViewModel, then pushed into WebView flow.
 13. Settings updates rewrite encrypted preferences and reload trusted hosts. The Android setup sheet only asks for the Hermes WebUI URL; the dashboard origin is visible and editable in WebUI Settings > System after seeding.
 14. On WebView load failure, `MainViewModel` probes `{serverUrl}/api/status` (Hermes WebUI public liveness endpoint) to distinguish "server is down" from a transient content/navigation error. This refines the `isOffline` state and the copy shown to the user in `WebShell`.
@@ -37,6 +37,7 @@
 
 - Local signed release builds load upload-key credentials from an untracked repo-root `keystore.properties` file.
 - CI signed release builds load the same values from `ANDROID_KEYSTORE_*` environment variables, with the keystore file decoded from the `ANDROID_KEYSTORE_BASE64` GitHub Actions secret.
+- The signed release workflow uses Node 24-compatible GitHub Actions majors to avoid deprecated Node 20 runner execution.
 - `:app:assembleRelease`, `:app:bundleRelease`, and `:app:stageReleaseArtifacts` fail fast when signing credentials are missing or the keystore file path is invalid, preventing unsigned distribution artifacts from being staged as release-ready output.
 - `:app:stageReleaseArtifacts` copies signed APK/AAB distribution files into the ignored root `build/release/` output folder so generated binaries do not live beside source files.
 
@@ -49,6 +50,7 @@
 - Microphone access requires Android `RECORD_AUDIO` plus `MODIFY_AUDIO_SETTINGS` and a trusted WebView context (allowlisted origin, with a null/opaque-origin fallback only while the active main frame is the configured Hermes WebUI route). Android grants only `RESOURCE_AUDIO_CAPTURE`; camera/video capture remains denied. Android also seeds WebUI's `mic_force_mediarecorder` localStorage flag at document start for the configured WebUI origin only, avoiding Web Speech API false-denied errors in Android WebView.
 - Browser notification access requires Android app notification permission and a trusted WebView context. The bridge uses AndroidX WebMessageListener rather than a secret-bearing JavaScript interface, rejects subframes and non-WebUI origins, limits payload handling to notification title/body/tag/target URL, and validates notification tap URLs against the same allowlist before loading them.
 - Android cleartext traffic is permitted so configured HTTP deployments can load. App-level URL policy still limits trusted in-app navigation and downloads to the configured host allowlist.
+- WebView uses browser-managed HTTP and service-worker cache semantics. Android does not maintain a separate stale copy of Hermes WebUI HTML or authenticated API responses.
 - Sensitive app-side config is encrypted with Android Keystore-backed keys.
 
 ## Extensibility points

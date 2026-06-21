@@ -164,7 +164,6 @@ dependencies {
     testImplementation(libs.truth)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
 fun copyFirstExistingArtifact(candidates: List<File>, target: File) {

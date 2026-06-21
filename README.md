@@ -24,6 +24,13 @@ Once added, the app will appear in the Play Store for you to install and receive
 
 Current pre-release version: `v0.1.3-pre-release`.
 
+Current Android build metadata:
+
+- Version name: `0.1.3-pre-release`
+- Version code: `4`
+- Application ID: `com.hermeswebui.android`
+- Compile/target SDK: `37`
+
 > Requires a running [Hermes WebUI](https://github.com/nesquena/hermes-webui) instance. Enter your server URL on first launch.
 
 ---
@@ -66,6 +73,7 @@ Requirements:
 - Kotlin + Jetpack Compose Android app
 - Hardened WebView for Hermes WebUI
 - Android WebView compatibility fixes for Hermes WebUI viewport rendering
+- Default WebView HTTP/service-worker caching with smoother reload rendering
 - System-bar inset handling so WebView content and native controls avoid status and navigation bars
 - Android WebView microphone compatibility that forces WebUI voice input through its MediaRecorder path
 - WebUI-owned navigation with Android seeding the WebUI Official Hermes Dashboard origin when needed
@@ -167,6 +175,7 @@ The workflow in `.github/workflows/release.yml` can then:
 - build and sign release APK/AAB artifacts
 - upload them as workflow artifacts on manual runs
 - attach them to a GitHub Release automatically when you push a `v*` tag
+- upload the AAB to the Google Play internal track when `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64` is configured
 
 Google Play listing assets:
 
@@ -218,7 +227,7 @@ Optional checks:
 | 🟢 | Data | `app/src/main/java/com/hermeswebui/android/data/` | Encrypted app settings and staged share payloads |
 | 🟠 | Domain | `app/src/main/java/com/hermeswebui/android/domain/` | URL validation and Android share intent parsing |
 | 🟡 | UI | `app/src/main/java/com/hermeswebui/android/ui/` | Compose screens and ViewModel state |
-| 🔴 | Tests | `app/src/test/java/com/hermeswebui/android/` | Unit coverage for URL and validation logic |
+| 🔴 | Tests | `app/src/test/java/com/hermeswebui/android/` | Unit coverage for URL policy, validation, and ViewModel load-state behavior |
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for the design notes and extension
 points.

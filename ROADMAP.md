@@ -13,7 +13,7 @@
 |---|---|
 | Secure WebView shell | Done - HTTP/HTTPS navigation, host allowlist, hardened defaults |
 | WebUI integration | Done - first-run WebUI URL setting, dashboard config seeding, session persistence, pull-to-refresh |
-| WebView compatibility | Done - disables forced darkening, patches Android viewport-unit collapse, respects system-bar safe insets, and forces WebUI microphone input onto the Android-compatible MediaRecorder path |
+| WebView compatibility | Done - disables forced darkening, patches Android viewport-unit collapse, respects system-bar safe insets, uses browser-managed cache defaults, smooths reload rendering, and forces WebUI microphone input onto the Android-compatible MediaRecorder path |
 | Official dashboard link | Done - Android seeds WebUI's Official Hermes Dashboard origin when WebUI has none, opens dashboard-origin requests in a Chrome Custom Tab with minimal browser UI, and avoids persisting dashboard pages as startup state |
 | Android sharing | Done - share-to-app intake for text and files |
 | Files | Done - WebView upload/download integration |
@@ -39,6 +39,7 @@
 - [x] Cleartext traffic permitted for configured HTTP deployments
 - [x] Back handling and WebView history behavior
 - [x] Pull-to-refresh
+- [x] Default WebView HTTP/service-worker cache behavior
 - [x] Loading, error, and offline states
 - [x] Cookie-backed session persistence
 - [x] Encrypted local settings
@@ -86,6 +87,7 @@
 | A-009 | P1 | Todo | Settings | Add server profile list | Needed before broader multi-host use |
 | A-007 | P1 | Todo | Security UX | Add optional biometric app lock gate | Feature-flagged in settings |
 | A-006 | P1 | Todo | Notifications | Add FCM push plumbing | Browser notification bridge, channel, and click routing are done; external push source still needs an infrastructure decision |
+| A-015 | P2 | Todo | Security | Plan encrypted settings migration off deprecated AndroidX Security Crypto APIs | Preserve existing encrypted preference keys and user settings during migration |
 | A-008 | P2 | Todo | Attachments | Add camera capture in file chooser flow | Include permissions and fallback behavior |
 | A-010 | P2 | Todo | Tests | Add instrumentation tests for navigation, share, and deep links | Emulator-ready where practical |
 | A-013 | P2 | Todo | Navigation | Add optional sessions/files/kanban/status shortcuts without replacing WebUI navigation | Sessions require authenticated API access (A-009 strategy) |
@@ -140,6 +142,9 @@ Recommended next order:
 | REL-004 | 2026-06-21 | Release | Changed distribution artifact staging to use `hermes-webui-v<version>.apk` for GitHub and `hermes-webui-v<version>.aab` for Google Play instead of repository-name filenames |
 | A-011 | 2026-06-21 | Release | Added local `keystore.properties` plus GitHub Actions secret-based signing so release APK/AAB builds fail fast unless they are signed and ready for distribution |
 | CLEANUP-003 | 2026-06-21 | Build | Moved staged release artifacts from root `release/` into ignored `build/release/` and ignored legacy root release outputs |
+| REL-005 | 2026-06-21 | Release | Updated signed release workflow actions to Node 24-compatible majors to avoid GitHub Actions Node 20 deprecation warnings |
+| PERF-001 | 2026-06-21 | WebView | Made WebView and service-worker cache defaults explicit, advertised the real app version in the user agent, and kept rendered content visible during reloads after the first successful page load |
+| CLEANUP-004 | 2026-06-21 | Cleanup | Removed stale in-code phase-2 TODOs already tracked in the roadmap, dropped unused Compose test catalog/debug references, and restored `keystore.properties.example` for documented signing setup |
 
 ---
 

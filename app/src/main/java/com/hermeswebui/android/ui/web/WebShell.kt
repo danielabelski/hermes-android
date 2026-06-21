@@ -18,7 +18,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 
@@ -27,6 +26,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 fun WebShell(
     webView: WebView,
     isLoading: Boolean,
+    hasLoadedContent: Boolean,
     isOffline: Boolean,
     errorMessage: String?,
     onRefresh: () -> Unit,
@@ -50,11 +50,11 @@ fun WebShell(
             modifier = Modifier.align(Alignment.TopCenter)
         )
 
-        if (isLoading) {
+        if (isLoading && !hasLoadedContent) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0x44000000)),
+                    .background(MaterialTheme.colorScheme.background),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator()

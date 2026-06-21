@@ -22,6 +22,7 @@ import android.os.Message
 import android.webkit.CookieManager
 import android.webkit.DownloadListener
 import android.webkit.PermissionRequest
+import android.webkit.ServiceWorkerController
 import android.webkit.SslErrorHandler
 import android.webkit.URLUtil
 import android.webkit.ValueCallback
@@ -389,6 +390,7 @@ class MainActivity : ComponentActivity() {
                     WebShell(
                         webView = webView,
                         isLoading = uiState.isLoading,
+                        hasLoadedContent = uiState.hasLoadedContent,
                         isOffline = uiState.isOffline,
                         errorMessage = uiState.errorMessage,
                         onRefresh = onReload,
@@ -417,8 +419,7 @@ class MainActivity : ComponentActivity() {
     private fun buildWebView(): WebView {
         return WebView(this).apply {
             settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.cacheMode = WebSettings.LOAD_DEFAULT
+            configureWebViewStorageAndCache(settings)
             settings.allowFileAccess = false
             settings.allowContentAccess = false
             settings.loadsImagesAutomatically = true
@@ -426,7 +427,7 @@ class MainActivity : ComponentActivity() {
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             settings.javaScriptCanOpenWindowsAutomatically = true
             settings.setSupportMultipleWindows(true)
-            settings.userAgentString = settings.userAgentString + " Hermes-Android/0.1"
+            settings.userAgentString = "${settings.userAgentString} Hermes-Android/${appVersionName()}"
             disableWebViewDarkening(settings)
             installHermesNotificationWebMessageBridge(this)
 
@@ -528,6 +529,7 @@ class MainActivity : ComponentActivity() {
                 override fun onPageCommitVisible(view: WebView?, url: String?) {
                     super.onPageCommitVisible(view, url)
                     applyHermesWebViewCompatibilityFixes(view, url)
+                    viewModel.onPageCommitVisible(url)
                 }
 
                 override fun onPageFinished(view: WebView?, url: String?) {
@@ -866,6 +868,25 @@ class MainActivity : ComponentActivity() {
             @Suppress("DEPRECATION")
             WebSettingsCompat.setForceDark(settings, WebSettingsCompat.FORCE_DARK_OFF)
         }
+    }
+
+    private fun configureWebViewStorageAndCache(settings: WebSettings) {
+        settings.domStorageEnabled = true
+        settings.cacheMode = WebSettings.LOAD_DEFAULT
+
+        ServiceWorkerController.getInstance().serviceWorkerWebSettings.apply {
+            cacheMode = WebSettings.LOAD_DEFAULT
+            allowContentAccess = false
+            allowFileAccess = false
+            blockNetworkLoads = false
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun appVersionName(): String {
+        return runCatching {
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "unknown"
+        }.getOrDefault("unknown")
     }
 
     private fun applyHermesWebViewCompatibilityFixes(view: WebView?, url: String?) {
@@ -1336,8 +1357,4 @@ class MainActivity : ComponentActivity() {
         val caps = manager.getNetworkCapabilities(network) ?: return false
         return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
-
-    // TODO(phase-2): Add biometric gate before rendering WebView when app lock is enabled.
-    // TODO(phase-2): Route FCM push notifications to deep links targeting Hermes sessions.
-    // TODO(phase-2): Add camera capture support in file chooser and share pipeline.
 }
