@@ -7,6 +7,7 @@ live on-device: secure WebView hosting, native navigation, sharing, downloads,
 and encrypted local settings.
 
 > 🔒 HTTP/HTTPS URL policy · 🌐 host allowlist · 📂 sharing + downloads · 🧊 encrypted settings
+> 🔔 Android-backed WebUI notifications
 
 The app is intentionally thin. Hermes behavior stays server-delivered through
 WebUI, while this repo owns Android integration and device safety.
@@ -20,6 +21,8 @@ We're looking for internal testers for the first pre-release build on Google Pla
 To get added, **message [@Paladin173](https://github.com/Paladin173) your Gmail address** and we'll send you a Play Store invite.
 
 Once added, the app will appear in the Play Store for you to install and receive automatic updates.
+
+Current pre-release version: `v0.1.3-pre-release`.
 
 > Requires a running [Hermes WebUI](https://github.com/nesquena/hermes-webui) instance. Enter your server URL on first launch.
 
@@ -77,6 +80,7 @@ Requirements:
 - File upload and download support
 - Share-to-app intake for text and files
 - Microphone capture support for trusted Hermes WebUI pages
+- Android-backed browser notifications for Hermes WebUI completion alerts
 - Cookie-backed WebView session persistence
 - Encrypted local settings storage
 - Native app identity, launcher icon, splash, and settings surface
@@ -88,6 +92,7 @@ Requirements:
 - External browser handoff for non-allowlisted HTTP/HTTPS links
 - WebView microphone grants are limited to trusted Hermes WebUI pages and audio capture only (with Android `RECORD_AUDIO` + `MODIFY_AUDIO_SETTINGS` permissions)
 - Android seeds WebUI's MediaRecorder microphone fallback for the configured Hermes origin only
+- WebUI notification grants and delivery are scoped to the configured Hermes origin, require Android notification permission when applicable, and route taps only to allowlisted Hermes WebUI URLs
 - Cleartext traffic permitted so configured HTTP deployments can load; HTTPS remains recommended outside trusted local networks
 - Hardened WebView defaults and SSL-error cancellation
 
@@ -123,6 +128,17 @@ Google Play listing assets:
 - `play-store/icon-512.svg` - editable vector source used for Play listing export
 - `tools/generate_play_store_icon.py` - regenerates both files from the launcher vector geometry
 - `tools/requirements-play-icon.txt` - Python dependency list for icon generation script
+
+Release artifact naming:
+
+```powershell
+.\gradlew.bat :app:stageReleaseArtifacts --no-daemon
+```
+
+This stages distribution files with the product name and version:
+
+- `release/hermes-webui-v<version>.apk` - GitHub/device APK artifact
+- `release/hermes-webui-v<version>.aab` - Google Play app bundle artifact
 
 ---
 

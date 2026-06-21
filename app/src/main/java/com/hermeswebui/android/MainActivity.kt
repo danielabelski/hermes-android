@@ -3,6 +3,9 @@ package com.hermeswebui.android
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.DownloadManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ActivityNotFoundException
@@ -12,6 +15,7 @@ import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.os.Message
@@ -54,10 +58,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.lifecycle.ViewModelProvider
+import androidx.webkit.JavaScriptReplyProxy
 import androidx.webkit.ScriptHandler
+import androidx.webkit.WebMessageCompat
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
@@ -72,6 +80,17 @@ import com.hermeswebui.android.ui.MainViewModelFactory
 import com.hermeswebui.android.ui.settings.SettingsBottomSheet
 import com.hermeswebui.android.ui.web.WebShell
 import org.json.JSONObject
+
+private const val HermesNotificationBridgeName = "HermesAndroidNotifications"
+private const val HermesNotificationChannelId = "hermes_webui_notifications"
+private const val HermesNotificationIdBase = 10_000
+private const val ActionOpenNotificationUrl = "com.hermeswebui.android.OPEN_NOTIFICATION_URL"
+private const val ExtraNotificationUrl = "com.hermeswebui.android.extra.NOTIFICATION_URL"
+
+private data class NotificationPermissionReply(
+    val id: String?,
+    val replyProxy: JavaScriptReplyProxy
+)
 
 private val HermesColorScheme = darkColorScheme(
     primary = Color(0xFFFFD700),
@@ -205,7 +224,10 @@ class MainActivity : ComponentActivity() {
     private var urlPolicy = UrlPolicy(emptySet())
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private var pendingAudioPermissionRequest: PermissionRequest? = null
+    private val pendingNotificationPermissionReplies = mutableListOf<NotificationPermissionReply>()
+    private var notificationPermissionRequestInFlight = false
     private var microphoneFallbackScriptHandler: ScriptHandler? = null
+    private var notificationBridgeScriptHandler: ScriptHandler? = null
     private val serverUrlValidator = ServerUrlValidator()
 
     private val filePickerLauncher = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -227,6 +249,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            notificationPermissionRequestInFlight = false
+            val permission = if (granted && areNativeNotificationsEnabled()) {
+                "granted"
+            } else {
+                "denied"
+            }
+            flushNotificationPermissionReplies(permission)
+            updateWebNotificationPermissionState(permission)
+            if (!granted) {
+                Toast.makeText(this, "Notification permission denied", Toast.LENGTH_SHORT).show()
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -241,6 +278,7 @@ class MainActivity : ComponentActivity() {
 
         val isDebuggable = (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
         WebView.setWebContentsDebuggingEnabled(isDebuggable)
+        ensureNotificationChannel()
         webView = buildWebView()
         installHermesWebUiDocumentStartFixes(webView, viewModel.uiState.value.settings.serverUrl)
 
@@ -261,7 +299,8 @@ class MainActivity : ComponentActivity() {
             viewModel.openSettings()
         } else {
             val lastLoadedUrl = settingsRepository.getLastLoadedUrl()
-            val startUrl = if (matchesConfiguredDashboardRoute(lastLoadedUrl)) {
+            val notificationUrl = notificationTargetUrl(intent)
+            val startUrl = notificationUrl ?: if (matchesConfiguredDashboardRoute(lastLoadedUrl)) {
                 settings.serverUrl
             } else {
                 lastLoadedUrl ?: settings.serverUrl
@@ -273,8 +312,18 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (handleNotificationIntent(intent)) {
+            return
+        }
         if (!handleDeepLink(intent)) {
             handleShareIntent(intent)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::webView.isInitialized) {
+            updateWebNotificationPermissionState()
         }
     }
 
@@ -379,6 +428,7 @@ class MainActivity : ComponentActivity() {
             settings.setSupportMultipleWindows(true)
             settings.userAgentString = settings.userAgentString + " Hermes-Android/0.1"
             disableWebViewDarkening(settings)
+            installHermesNotificationWebMessageBridge(this)
 
             CookieManager.getInstance().setAcceptCookie(true)
             CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
@@ -531,6 +581,242 @@ class MainActivity : ComponentActivity() {
         audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
     }
 
+    private fun installHermesNotificationWebMessageBridge(view: WebView) {
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) return
+
+        runCatching {
+            WebViewCompat.addWebMessageListener(
+                view,
+                HermesNotificationBridgeName,
+                setOf("*")
+            ) { _, message, sourceOrigin, isMainFrame, replyProxy ->
+                runOnUiThread {
+                    handleHermesNotificationBridgeMessage(
+                        message = message,
+                        sourceOrigin = sourceOrigin,
+                        isMainFrame = isMainFrame,
+                        replyProxy = replyProxy
+                    )
+                }
+            }
+        }
+    }
+
+    private fun handleHermesNotificationBridgeMessage(
+        message: WebMessageCompat,
+        sourceOrigin: Uri,
+        isMainFrame: Boolean,
+        replyProxy: JavaScriptReplyProxy
+    ) {
+        val parsed = runCatching { JSONObject(message.data.orEmpty()) }.getOrNull()
+        val id = parsed?.optString("id")?.takeIf { it.isNotBlank() }
+        if (parsed == null || !isTrustedNotificationBridgeSource(sourceOrigin, isMainFrame)) {
+            postNotificationBridgeReply(replyProxy, id, ok = false, permission = "denied")
+            return
+        }
+
+        when (parsed.optString("type")) {
+            "permissionState" -> {
+                postNotificationBridgeReply(
+                    replyProxy = replyProxy,
+                    id = id,
+                    ok = true,
+                    permission = webNotificationPermissionState()
+                )
+            }
+            "requestPermission" -> requestHermesNotificationPermission(replyProxy, id)
+            "show" -> {
+                val shown = showHermesNotification(parsed.optJSONObject("payload") ?: JSONObject())
+                postNotificationBridgeReply(
+                    replyProxy = replyProxy,
+                    id = id,
+                    ok = shown,
+                    permission = webNotificationPermissionState()
+                )
+            }
+            else -> postNotificationBridgeReply(
+                replyProxy = replyProxy,
+                id = id,
+                ok = false,
+                permission = webNotificationPermissionState()
+            )
+        }
+    }
+
+    private fun isTrustedNotificationBridgeSource(sourceOrigin: Uri, isMainFrame: Boolean): Boolean {
+        if (!isMainFrame) return false
+        val normalizedOrigin = normalizePermissionOrigin(sourceOrigin) ?: sourceOrigin.toString()
+        return matchesConfiguredWebUiRoute(normalizedOrigin) && matchesConfiguredWebUiRoute(webView.url)
+    }
+
+    private fun requestHermesNotificationPermission(replyProxy: JavaScriptReplyProxy, id: String?) {
+        val currentPermission = webNotificationPermissionState()
+        if (currentPermission == "granted") {
+            postNotificationBridgeReply(replyProxy, id, ok = true, permission = "granted")
+            return
+        }
+        if (currentPermission == "denied") {
+            postNotificationBridgeReply(replyProxy, id, ok = false, permission = "denied")
+            Toast.makeText(this, "Enable app notifications in Android settings", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            postNotificationBridgeReply(replyProxy, id, ok = false, permission = currentPermission)
+            return
+        }
+
+        settingsRepository.markNotificationPermissionRequested()
+        pendingNotificationPermissionReplies += NotificationPermissionReply(id, replyProxy)
+        if (!notificationPermissionRequestInFlight) {
+            notificationPermissionRequestInFlight = true
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    private fun postNotificationBridgeReply(
+        replyProxy: JavaScriptReplyProxy,
+        id: String?,
+        ok: Boolean,
+        permission: String,
+        error: String? = null
+    ) {
+        val response = JSONObject()
+            .put("id", id ?: "")
+            .put("ok", ok)
+            .put("permission", permission)
+        if (!error.isNullOrBlank()) {
+            response.put("error", error)
+        }
+        runCatching {
+            replyProxy.postMessage(response.toString())
+        }
+    }
+
+    private fun flushNotificationPermissionReplies(permission: String) {
+        val replies = pendingNotificationPermissionReplies.toList()
+        pendingNotificationPermissionReplies.clear()
+        replies.forEach { pending ->
+            postNotificationBridgeReply(
+                replyProxy = pending.replyProxy,
+                id = pending.id,
+                ok = permission == "granted",
+                permission = permission
+            )
+        }
+    }
+
+    private fun webNotificationPermissionState(): String {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val hasRuntimePermission = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+            return when {
+                hasRuntimePermission && areNativeNotificationsEnabled() -> "granted"
+                settingsRepository.hasRequestedNotificationPermission() -> "denied"
+                else -> "default"
+            }
+        }
+
+        return if (areNativeNotificationsEnabled()) "granted" else "denied"
+    }
+
+    private fun areNativeNotificationsEnabled(): Boolean {
+        return NotificationManagerCompat.from(this).areNotificationsEnabled()
+    }
+
+    private fun ensureNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+
+        val channel = NotificationChannel(
+            HermesNotificationChannelId,
+            "Hermes updates",
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = "Task completion and attention notifications from Hermes WebUI"
+        }
+        getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun showHermesNotification(payload: JSONObject): Boolean {
+        if (webNotificationPermissionState() != "granted") return false
+
+        val options = payload.optJSONObject("options") ?: JSONObject()
+        val title = payload.optString("title")
+            .takeIf { it.isNotBlank() }
+            ?: getString(R.string.app_name)
+        val body = options.optString("body").takeIf { it.isNotBlank() }
+        val tag = options.optString("tag").takeIf { it.isNotBlank() }
+        val data = options.optJSONObject("data")
+        val targetUrl = data
+            ?.optString("url")
+            ?.takeIf { isTrustedNotificationTarget(it) }
+            ?: viewModel.uiState.value.currentUrl.takeIf { isTrustedNotificationTarget(it) }
+
+        val pendingIntent = targetUrl?.let { buildNotificationPendingIntent(it, tag) }
+        val notification = NotificationCompat.Builder(this, HermesNotificationChannelId)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(title)
+            .setContentText(body ?: title)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body ?: title))
+            .setAutoCancel(true)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setColor(ContextCompat.getColor(this, R.color.brand_sky))
+            .apply {
+                if (pendingIntent != null) {
+                    setContentIntent(pendingIntent)
+                }
+            }
+            .build()
+
+        val notificationId = HermesNotificationIdBase + ((tag ?: title).hashCode() and 0x0FFFFFFF)
+        NotificationManagerCompat.from(this).notify(tag, notificationId, notification)
+        return true
+    }
+
+    private fun buildNotificationPendingIntent(targetUrl: String, tag: String?): PendingIntent {
+        val requestCode = (tag ?: targetUrl).hashCode()
+        val intent = Intent(this, MainActivity::class.java).apply {
+            action = ActionOpenNotificationUrl
+            putExtra(ExtraNotificationUrl, targetUrl)
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        return PendingIntent.getActivity(
+            this,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    private fun handleNotificationIntent(intent: Intent?): Boolean {
+        val targetUrl = notificationTargetUrl(intent) ?: return false
+        webView.loadUrl(targetUrl)
+        return true
+    }
+
+    private fun notificationTargetUrl(intent: Intent?): String? {
+        if (intent?.action != ActionOpenNotificationUrl) return null
+        return intent.getStringExtra(ExtraNotificationUrl)
+            ?.takeIf { isTrustedNotificationTarget(it) }
+    }
+
+    private fun isTrustedNotificationTarget(url: String?): Boolean {
+        return !url.isNullOrBlank() && urlPolicy.isAllowed(url) && matchesConfiguredWebUiRoute(url)
+    }
+
+    private fun updateWebNotificationPermissionState(permission: String = webNotificationPermissionState()) {
+        if (!matchesConfiguredWebUiRoute(webView.url)) return
+        val quotedPermission = JSONObject.quote(permission)
+        webView.evaluateJavascript(
+            "window.__hermesAndroidSetNotificationPermission && window.__hermesAndroidSetNotificationPermission($quotedPermission);",
+            null
+        )
+    }
+
     private fun hasRecordAudioPermission(): Boolean {
         return ContextCompat.checkSelfPermission(
             this,
@@ -590,6 +876,7 @@ class MainActivity : ComponentActivity() {
         // Hermes WebUI uses 100dvh for the root flex shell, so force the measured viewport height.
         view.evaluateJavascript(HermesWebViewViewportFixScript, null)
         view.evaluateJavascript(HermesWebUiMicrophoneFallbackScript, null)
+        view.evaluateJavascript(buildHermesWebUiNotificationBridgeScript(), null)
 
         val dashboardUrl = viewModel.uiState.value.settings.dashboardUrl
         if (dashboardUrl.isNotBlank()) {
@@ -603,6 +890,7 @@ class MainActivity : ComponentActivity() {
         val originRule = UrlOrigins.documentStartOriginRule(serverUrl) ?: return
 
         microphoneFallbackScriptHandler?.remove()
+        notificationBridgeScriptHandler?.remove()
         microphoneFallbackScriptHandler = runCatching {
             WebViewCompat.addDocumentStartJavaScript(
                 view,
@@ -610,6 +898,209 @@ class MainActivity : ComponentActivity() {
                 setOf(originRule)
             )
         }.getOrNull()
+        notificationBridgeScriptHandler = runCatching {
+            WebViewCompat.addDocumentStartJavaScript(
+                view,
+                buildHermesWebUiNotificationBridgeScript(),
+                setOf(originRule)
+            )
+        }.getOrNull()
+    }
+
+    private fun buildHermesWebUiNotificationBridgeScript(): String {
+        val quotedBridgeName = JSONObject.quote(HermesNotificationBridgeName)
+        val quotedPermission = JSONObject.quote(webNotificationPermissionState())
+        return """
+            (function() {
+              var bridgeName = $quotedBridgeName;
+              var initialPermission = $quotedPermission;
+              var nativeBridge = window[bridgeName];
+
+              var normalizePermission = function(value) {
+                value = String(value || '').toLowerCase();
+                return (value === 'granted' || value === 'denied' || value === 'default') ? value : 'default';
+              };
+
+              if (window.__hermesAndroidNotificationsInstalled) {
+                if (typeof window.__hermesAndroidSetNotificationPermission === 'function') {
+                  window.__hermesAndroidSetNotificationPermission(initialPermission);
+                }
+                return;
+              }
+
+              if (!nativeBridge || typeof nativeBridge.postMessage !== 'function') return;
+
+              var permission = normalizePermission(initialPermission);
+              var pending = {};
+              var nextId = 1;
+
+              var makeDomException = function(message, name) {
+                try { return new DOMException(message, name); } catch (_) {
+                  var error = new Error(message);
+                  error.name = name;
+                  return error;
+                }
+              };
+
+              var safeEvent = function(type) {
+                try { return new Event(type); } catch (_) { return { type: type }; }
+              };
+
+              var cloneOptions = function(options) {
+                var clone = {};
+                if (!options || typeof options !== 'object') return clone;
+                ['body', 'tag', 'icon', 'badge'].forEach(function(key) {
+                  if (options[key] != null) clone[key] = String(options[key]);
+                });
+                if (options.data && typeof options.data === 'object') {
+                  clone.data = {};
+                  if (options.data.url != null) clone.data.url = String(options.data.url);
+                }
+                return clone;
+              };
+
+              var postNative = function(type, payload) {
+                return new Promise(function(resolve) {
+                  var id = String(Date.now()) + '-' + String(nextId++);
+                  pending[id] = resolve;
+                  try {
+                    nativeBridge.postMessage(JSON.stringify({ id: id, type: type, payload: payload || {} }));
+                  } catch (_) {
+                    delete pending[id];
+                    resolve({ ok: false, permission: permission, error: 'post-failed' });
+                    return;
+                  }
+                  window.setTimeout(function() {
+                    if (!pending[id]) return;
+                    delete pending[id];
+                    resolve({ ok: false, permission: permission, error: 'timeout' });
+                  }, 15000);
+                });
+              };
+
+              nativeBridge.onmessage = function(event) {
+                var response = null;
+                try { response = JSON.parse(event && event.data ? String(event.data) : '{}'); } catch (_) {}
+                if (!response) return;
+                if (response.permission) permission = normalizePermission(response.permission);
+                var id = String(response.id || '');
+                var resolve = pending[id];
+                if (resolve) {
+                  delete pending[id];
+                  resolve(response);
+                }
+              };
+
+              window.__hermesAndroidSetNotificationPermission = function(nextPermission) {
+                permission = normalizePermission(nextPermission);
+              };
+
+              var showNativeNotification = function(title, options) {
+                if (permission !== 'granted') {
+                  return Promise.reject(makeDomException('Notification permission denied', 'NotAllowedError'));
+                }
+                return postNative('show', {
+                  title: String(title || ''),
+                  options: cloneOptions(options)
+                }).then(function(response) {
+                  if (response && response.permission) permission = normalizePermission(response.permission);
+                  if (response && response.ok) return undefined;
+                  throw makeDomException('Notification delivery failed', 'AbortError');
+                });
+              };
+
+              function HermesAndroidNotification(title, options) {
+                if (!(this instanceof HermesAndroidNotification)) {
+                  return new HermesAndroidNotification(title, options);
+                }
+                if (permission !== 'granted') {
+                  throw makeDomException('Notification permission denied', 'NotAllowedError');
+                }
+                this.title = String(title || '');
+                this.body = options && options.body != null ? String(options.body) : '';
+                this.tag = options && options.tag != null ? String(options.tag) : '';
+                this.data = options && options.data != null ? options.data : null;
+                this.onclick = null;
+                this.onshow = null;
+                this.onerror = null;
+                this.onclose = null;
+
+                var notification = this;
+                showNativeNotification(this.title, options)
+                  .then(function() {
+                    if (typeof notification.onshow === 'function') notification.onshow(safeEvent('show'));
+                  })
+                  .catch(function(error) {
+                    if (typeof notification.onerror === 'function') notification.onerror(error);
+                  });
+              }
+
+              HermesAndroidNotification.prototype.close = function() {
+                if (typeof this.onclose === 'function') this.onclose(safeEvent('close'));
+              };
+
+              Object.defineProperty(HermesAndroidNotification, 'permission', {
+                configurable: true,
+                enumerable: true,
+                get: function() { return permission; }
+              });
+              Object.defineProperty(HermesAndroidNotification, 'maxActions', {
+                configurable: true,
+                enumerable: true,
+                get: function() { return 0; }
+              });
+              HermesAndroidNotification.requestPermission = function(callback) {
+                return postNative('requestPermission', {}).then(function(response) {
+                  if (response && response.permission) permission = normalizePermission(response.permission);
+                  if (typeof callback === 'function') {
+                    window.setTimeout(function() { callback(permission); }, 0);
+                  }
+                  return permission;
+                });
+              };
+
+              try {
+                Object.defineProperty(window, 'Notification', {
+                  configurable: true,
+                  writable: true,
+                  value: HermesAndroidNotification
+                });
+              } catch (_) {
+                try { window.Notification = HermesAndroidNotification; } catch (_) {}
+              }
+
+              var patchServiceWorkerNotifications = function() {
+                try {
+                  if (!window.ServiceWorkerRegistration || !window.ServiceWorkerRegistration.prototype) return;
+                  var proto = window.ServiceWorkerRegistration.prototype;
+                  if (proto.__hermesAndroidNotificationsPatched) return;
+                  Object.defineProperty(proto, 'showNotification', {
+                    configurable: true,
+                    writable: true,
+                    value: function(title, options) {
+                      return showNativeNotification(title, options);
+                    }
+                  });
+                  if (typeof proto.getNotifications !== 'function') {
+                    Object.defineProperty(proto, 'getNotifications', {
+                      configurable: true,
+                      writable: true,
+                      value: function() { return Promise.resolve([]); }
+                    });
+                  }
+                  proto.__hermesAndroidNotificationsPatched = true;
+                } catch (_) {}
+              };
+
+              window.__hermesAndroidNotificationsInstalled = true;
+              patchServiceWorkerNotifications();
+              window.setTimeout(patchServiceWorkerNotifications, 0);
+              window.setTimeout(patchServiceWorkerNotifications, 1000);
+              postNative('permissionState', {}).then(function(response) {
+                if (response && response.permission) permission = normalizePermission(response.permission);
+              });
+            })();
+        """.trimIndent()
     }
 
     private fun buildHermesDashboardConfigScript(dashboardUrl: String): String {

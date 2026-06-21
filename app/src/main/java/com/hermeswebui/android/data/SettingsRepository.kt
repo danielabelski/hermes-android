@@ -59,6 +59,14 @@ class SettingsRepository(context: Context) {
         sharedPreferences.edit { remove(KEY_LAST_URL) }
     }
 
+    fun hasRequestedNotificationPermission(): Boolean {
+        return sharedPreferences.getBoolean(KEY_NOTIFICATION_PERMISSION_REQUESTED, false)
+    }
+
+    fun markNotificationPermissionRequested() {
+        sharedPreferences.edit { putBoolean(KEY_NOTIFICATION_PERMISSION_REQUESTED, true) }
+    }
+
     fun saveLastLoadedUrl(url: String) {
         sharedPreferences.edit { putString(KEY_LAST_URL, url) }
     }
@@ -73,5 +81,6 @@ class SettingsRepository(context: Context) {
         private const val KEY_ALLOWED_HOSTS = "allowed_hosts"
         private const val KEY_LAST_URL = "last_url"
         private const val KEY_IS_CONFIGURED = "is_configured"
+        private const val KEY_NOTIFICATION_PERMISSION_REQUESTED = "notification_permission_requested"
     }
 }

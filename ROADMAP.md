@@ -3,7 +3,7 @@
 > Native Android companion for Hermes Web UI. Secure WebView shell first,
 > selective Android-native features over time.
 >
-> Last updated: 2026-06-20
+> Last updated: 2026-06-21
 
 ---
 
@@ -21,8 +21,9 @@
 | Local settings | Done - encrypted settings storage |
 | Native navigation | Done - WebUI-owned dashboard link integration and deep links |
 | Server health probing | Done - `/api/status` probe to distinguish server-down from content errors |
+| Browser notifications | Done - WebUI Notification API bridge, Android runtime permission, notification channel, and trusted WebUI tap routing |
 | Native distribution polish | Partial - app identity exists; release signing workflow still open |
-| Phase 2 native features | Planned - biometric lock, server profiles, push notifications, camera, sessions panel |
+| Phase 2 native features | Planned - biometric lock, server profiles, FCM push, camera, sessions panel |
 
 ---
 
@@ -47,6 +48,7 @@
 - [x] File upload support
 - [x] File download support
 - [x] Microphone capture support for WebUI voice input
+- [x] Browser notification permission and delivery bridge for WebUI alerts
 - [x] Share-to-app intake for text
 - [x] Share-to-app intake for files
 - [x] Native launcher identity
@@ -66,8 +68,8 @@
 - [ ] Server profile list for multiple Hermes hosts
 - [ ] Optional biometric app lock before showing WebView
 - [ ] FCM push notification plumbing
-- [ ] Notification channel strategy
-- [ ] Notification click routing to WebUI routes via deep links
+- [x] Notification channel strategy
+- [x] Notification click routing to allowlisted WebUI routes
 - [ ] Expanded native settings for theme, notifications, and profiles
 - [ ] Optional native sessions list (requires authenticated API access)
 - [ ] WebUI menu shortcuts for files, kanban, and status if needed
@@ -83,7 +85,7 @@
 |---|---|---|---|---|---|
 | A-009 | P1 | Todo | Settings | Add server profile list | Needed before broader multi-host use |
 | A-007 | P1 | Todo | Security UX | Add optional biometric app lock gate | Feature-flagged in settings |
-| A-006 | P1 | Todo | Notifications | Add FCM plumbing, channels, and click routing | Requires infrastructure decision for push source |
+| A-006 | P1 | Todo | Notifications | Add FCM push plumbing | Browser notification bridge, channel, and click routing are done; external push source still needs an infrastructure decision |
 | A-008 | P2 | Todo | Attachments | Add camera capture in file chooser flow | Include permissions and fallback behavior |
 | A-010 | P2 | Todo | Tests | Add instrumentation tests for navigation, share, and deep links | Emulator-ready where practical |
 | A-011 | P3 | Todo | Release | Add release signing automation docs and snippets | Keep keystore secrets out of repo |
@@ -133,6 +135,10 @@ Recommended next order:
 | PERM-002 | 2026-06-20 | Permissions | Added a document-start WebUI microphone fallback flag for the configured Hermes origin so Android WebView skips the unreliable Web Speech API path and uses MediaRecorder/getUserMedia |
 | SEC-002 | 2026-06-20 | Security | Relaxed URL policy to allow configured HTTP or HTTPS Hermes hosts while retaining host allowlist checks and non-web scheme blocking |
 | UX-001 | 2026-06-20 | Settings | Changed the first-run server URL sample from prefilled text to placeholder text that disappears on focus |
+| REL-002 | 2026-06-20 | Release | Renamed app to "Hermes WebUI" (Play Store branding), updated version to `0.1.2`, and built `hermes-android-v0.1.2-pre-release.apk` for GitHub release and device testing |
+| NOTIF-001 | 2026-06-21 | Notifications | Added Android-backed WebUI browser notifications with `POST_NOTIFICATIONS`, a native channel, a scoped WebView Notification API bridge, service-worker notification fallback, and allowlisted notification tap routing |
+| REL-003 | 2026-06-21 | Release | Updated Android app version metadata to `0.1.3-pre-release` with `versionCode` 4 for the next pre-release build |
+| REL-004 | 2026-06-21 | Release | Changed distribution artifact staging to use `hermes-webui-v<version>.apk` for GitHub and `hermes-webui-v<version>.aab` for Google Play instead of repository-name filenames |
 
 ---
 
