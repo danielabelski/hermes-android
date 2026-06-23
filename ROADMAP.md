@@ -167,7 +167,6 @@ workflow changes should be made in Hermes WebUI instead.
 | REL-017 | 2026-06-23 | Release | Added Play Store What's New changelog generation from the same GitHub generated release notes used for GitHub Releases |
 | A-020-P1 | 2026-06-23 | Settings | Implemented Phase 1 of multi-server profile support (Issue #20): added native "Application Settings" entry point in Hermes WebUI sidebar below Help via WebView document-start shim, wired `hermes://app/settings` deep link handling to open native settings bottom sheet, injected phone-outline SVG icon for visual consistency, and validated with unit tests and emulator deployment |
 | BUG-016 | 2026-06-23 | Navigation | Fixed back button closing app on first press: implemented "press back again to exit" pattern that requires two back presses within 2 seconds to close app when no WebView history is available, prevents accidental app closure from stuck states, and shows "Press back again to exit" toast on first back press |
+| BUG-017 | 2026-06-23 | Settings | Tightened multi-server add flow: server profile creation now rejects duplicates by normalized URL and case-insensitive name, and the Add Server dialog explicitly prompts for an optional friendly name while preserving URL fallback when blank |
 | REL-018 | 2026-06-23 | Release | Updated Android app version metadata to `0.1.9` with `versionCode` 10 |
-
-
 

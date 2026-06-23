@@ -1730,11 +1730,28 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleAddServerProfile(name: String, url: String) {
-        if (!serverUrlValidator.isValid(url)) {
+        val trimmedName = name.trim()
+        val trimmedUrl = url.trim()
+
+        if (!serverUrlValidator.isValid(trimmedUrl)) {
             Toast.makeText(this, "Server URL must be a valid http:// or https:// URL", Toast.LENGTH_LONG).show()
             return
         }
-        val profile = viewModel.addServerProfile(name, url)
+
+        val existingProfiles = settingsRepository.getProfiles()
+        if (existingProfiles.any { normalizeServerProfileUrl(it.url) == normalizeServerProfileUrl(trimmedUrl) }) {
+            Toast.makeText(this, "A server with this URL already exists", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (trimmedName.isNotBlank() && existingProfiles.any { it.name.trim().equals(trimmedName, ignoreCase = true) }) {
+            Toast.makeText(this, "A server with this name already exists", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val profile = viewModel.addServerProfile(
+            name = trimmedName.ifBlank { trimmedUrl },
+            url = trimmedUrl
+        )
         if (profile != null) {
             Toast.makeText(this, "Server profile \"${profile.name}\" added", Toast.LENGTH_SHORT).show()
         } else {
@@ -1916,5 +1933,9 @@ class MainActivity : ComponentActivity() {
             }
             activeOAuthPopup = null
         }
+    }
+
+    private fun normalizeServerProfileUrl(url: String): String {
+        return url.trim().trimEnd('/').lowercase()
     }
 }

@@ -63,6 +63,7 @@ fun SettingsBottomSheet(
 
     if (showAddProfileDialog) {
         AddServerProfileDialog(
+            existingProfiles = serverProfiles,
             onConfirm = { name, url -> onAddProfile(name, url); showAddProfileDialog = false },
             onDismiss = { showAddProfileDialog = false }
         )
@@ -295,12 +296,20 @@ private fun EditProfileDialog(
 
 @Composable
 private fun AddServerProfileDialog(
+    existingProfiles: List<ServerProfile>,
     onConfirm: (String, String) -> Unit,
     onDismiss: () -> Unit
 ) {
     var profileName by remember { mutableStateOf("") }
     var profileUrl by remember { mutableStateOf("") }
-    val isValidUrl = profileUrl.isNotBlank() && (profileUrl.startsWith("http://") || profileUrl.startsWith("https://"))
+    val trimmedName = profileName.trim()
+    val trimmedUrl = profileUrl.trim()
+    val normalizedUrl = normalizeServerUrl(trimmedUrl)
+    val isValidUrl = trimmedUrl.isNotBlank() && (trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("https://"))
+    val isDuplicateUrl = existingProfiles.any { normalizeServerUrl(it.url) == normalizedUrl }
+    val isDuplicateName = trimmedName.isNotBlank() &&
+        existingProfiles.any { it.name.trim().equals(trimmedName, ignoreCase = true) }
+    val canSubmit = isValidUrl && !isDuplicateUrl && !isDuplicateName
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -312,7 +321,14 @@ private fun AddServerProfileDialog(
                     onValueChange = { profileName = it },
                     label = { Text("Server name (optional)") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    supportingText = {
+                        Text(
+                            if (isDuplicateName) "A server with this name already exists"
+                            else "Optional friendly name"
+                        )
+                    },
+                    isError = isDuplicateName
                 )
                 OutlinedTextField(
                     value = profileUrl,
@@ -323,11 +339,12 @@ private fun AddServerProfileDialog(
                     modifier = Modifier.fillMaxWidth(),
                     supportingText = { 
                         Text(
-                            if (!isValidUrl && profileUrl.isNotBlank()) "Must start with http:// or https://" 
+                            if (!isValidUrl && trimmedUrl.isNotBlank()) "Must start with http:// or https://"
+                            else if (isDuplicateUrl) "A server with this URL already exists"
                             else "HTTP or HTTPS"
                         )
                     },
-                    isError = !isValidUrl && profileUrl.isNotBlank()
+                    isError = (!isValidUrl && trimmedUrl.isNotBlank()) || isDuplicateUrl
                 )
             }
         },
@@ -337,15 +354,20 @@ private fun AddServerProfileDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    if (isValidUrl) {
-                        onConfirm(profileName.ifBlank { profileUrl }, profileUrl)
+                    if (canSubmit) {
+                        onConfirm(trimmedName.ifBlank { trimmedUrl }, trimmedUrl)
                         onDismiss()
                     }
                 },
-                enabled = isValidUrl
+                enabled = canSubmit
             ) {
                 Text("Add")
             }
         }
     )
 }
+
+private fun normalizeServerUrl(url: String): String {
+    return url.trim().trimEnd('/').lowercase()
+}
+
