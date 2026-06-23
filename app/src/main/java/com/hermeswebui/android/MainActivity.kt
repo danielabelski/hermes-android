@@ -133,9 +133,12 @@ private val HermesWebViewViewportFixScript = """
           style.id = styleId;
           (document.head || document.documentElement).appendChild(style);
         }
+        // Keep vertical scrolling available. Some WebUI panels (for example the generated
+        // update summary/details block) expand below the fold and become unusable if body
+        // scrolling is locked with `overflow: hidden`.
         style.textContent = [
           'html, body { height: ' + px + ' !important; min-height: ' + px + ' !important; }',
-          'body { overflow: hidden !important; }',
+          'body { overflow-x: hidden !important; }',
           '.layout, .rail, .sidebar, .main, .rightpanel, #sessionList, .messages { min-height: 0 !important; }',
           '.session-action-menu, .workspace-prefs-menu { max-height: ' + menuMax + ' !important; }'
         ].join('\n');

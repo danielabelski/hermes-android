@@ -38,12 +38,12 @@ To get added, **message [@Paladin173](https://github.com/Paladin173) your Gmail 
 
 Once added, the app will appear in the Play Store for you to install and receive automatic updates.
 
-Current pre-release version: `v0.1.7`.
+Current pre-release version: `v0.1.8`.
 
 Current Android build metadata:
 
-- Version name: `0.1.7`
-- Version code: `8`
+- Version name: `0.1.8`
+- Version code: `9`
 - Application ID: `com.hermeswebui.android`
 - Compile/target SDK: `37`
 
@@ -90,7 +90,7 @@ Requirements:
 - Kotlin + Jetpack Compose Android app
 - Hardened WebView for Hermes WebUI
 - Android WebView compatibility fixes for Hermes WebUI viewport rendering
-- Android WebView compatibility shim that re-caps Hermes WebUI floating/long-press menu height so conversation action menus render full-size instead of collapsing (Android WebView treats CSS `100vh` as `0`)
+- Android WebView compatibility shim that re-caps Hermes WebUI floating/long-press menu height so conversation action menus render full-size instead of collapsing (Android WebView treats CSS `100vh` as `0`) while preserving vertical page scrolling for expandable content such as generated update summaries
 - Default WebView HTTP/service-worker caching with smoother reload rendering
 - System-bar inset handling so WebView content and native controls avoid status and navigation bars
 - Android WebView microphone compatibility that forces WebUI voice input through its MediaRecorder path
@@ -194,7 +194,7 @@ The workflow in `.github/workflows/release.yml` can then:
 - upload them as workflow artifacts on manual runs
 - create or update a GitHub Release automatically from manual runs using the Gradle Android `versionName`
 - attach the APK to a GitHub Release automatically when you push a matching `v*` tag
-- fail a tag release when the tag, such as `v0.1.7`, does not match the Android `versionName`
+- fail a tag release when the tag, such as `v0.1.8`, does not match the Android `versionName`
 
 Google Play listing assets:
 
@@ -218,7 +218,7 @@ release channel:
 Before each GitHub release, increment both `appVersionName` and `versionCode` in
 `app/build.gradle.kts`. Manual workflow runs create or update `v<versionName>`
 automatically; tag-triggered runs must use the matching tag, for example
-`v0.1.7`.
+`v0.1.8`.
 
 ---
 
