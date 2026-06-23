@@ -83,7 +83,7 @@ workflow changes should be made in Hermes WebUI instead.
 - [ ] Evaluate a Trusted Web Activity (TWA) variant rendered in real Chrome, gated on Hermes WebUI serving `/.well-known/assetlinks.json` (draft + fingerprint in `twa/`); accept loss of native bridges and HTTPS-only verification before pursuing
 - [x] Final package/application ID decision before first public release
 - [x] Release signing automation docs and snippets
-- [ ] Background continuity while app is backgrounded (Issue 10): staged plan for resume polish, optional ongoing activity notification, and optional tray approvals in `ISSUE_10_BACKGROUND_EXECUTION_PROPOSAL.md`
+- [ ] Background continuity while app is backgrounded (Issue 10): staged plan for resume polish, optional ongoing activity notification, and optional tray approvals in `docs/proposals/ISSUE_10_BACKGROUND_EXECUTION_PROPOSAL.md`
 
 ---
 
@@ -95,7 +95,7 @@ workflow changes should be made in Hermes WebUI instead.
 | M-002 | As needed | Open | Security | Keep WebView, URL policy, permissions, and encrypted settings behavior hardened | Preserve HTTP/HTTPS configured-host support and host allowlist enforcement |
 | M-003 | As needed | Open | Bugfix | Fix Android-wrapper regressions | Scope to WebView hosting, permissions, share/download, notifications, deep links, settings, and release flow |
 | M-004 | As needed | Open | Release | Keep signed release automation current | Maintain alignment between Gradle metadata, `keystore.properties.example`, and GitHub Actions secrets |
-| M-005 | High | Open | Platform | Triage and stage Issue 10 background-execution work (A/B/C phases) | Proposal documented in `ISSUE_10_BACKGROUND_EXECUTION_PROPOSAL.md`; execute in incremental phases to manage API and battery risk |
+| M-005 | High | Open | Platform | Triage and stage Issue 10 background-execution work (A/B/C phases) | Proposal documented in `docs/proposals/ISSUE_10_BACKGROUND_EXECUTION_PROPOSAL.md`; execute in incremental phases to manage API and battery risk |
 
 ---
 
