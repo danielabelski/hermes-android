@@ -1,4 +1,4 @@
-name: GitHub APK release
+name: GitHub APK Release
 
 on:
   workflow_dispatch:

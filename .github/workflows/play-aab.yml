@@ -1,4 +1,4 @@
-name: Play AAB upload
+name: Play Store Release
 
 on:
   workflow_dispatch:
