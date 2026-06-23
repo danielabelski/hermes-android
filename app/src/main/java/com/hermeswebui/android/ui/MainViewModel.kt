@@ -155,21 +155,42 @@ class MainViewModel(
             val maxIntervalMs = 10_000L
             var elapsedRetryMs = 0L
             val maxRetryDurationMs = 60_000L
+            var msUntilNextProbe = intervalMs
             _uiState.update { it.copy(isReconnecting = true) }
 
             while (elapsedRetryMs < maxRetryDurationMs) {
-                delay(intervalMs.milliseconds)
-                elapsedRetryMs += intervalMs
+                val remainingRetryBudgetMs = maxRetryDurationMs - elapsedRetryMs
+                val untilDeferredVisibleMs = deferredErrorSnapshot?.let {
+                    val remainingMs = it.visibleAtMs - nowMs()
+                    if (remainingMs > 0L && _uiState.value.errorMessage == null) {
+                        remainingMs
+                    } else {
+                        Long.MAX_VALUE
+                    }
+                } ?: Long.MAX_VALUE
+                val waitMs = minOf(msUntilNextProbe, untilDeferredVisibleMs, remainingRetryBudgetMs)
+
+                if (waitMs > 0L) {
+                    delay(waitMs.milliseconds)
+                    elapsedRetryMs += waitMs
+                    msUntilNextProbe -= waitMs
+                }
+
+                promoteDeferredErrorIfReady(deferredErrorSnapshot)
+
+                if (msUntilNextProbe > 0L) continue
+
                 if (serverReachabilityChecker(serverUrl)) {
                     deferredPageError = null
                     _uiState.update { it.copy(isReconnecting = false) }
                     _autoReloadEvent.tryEmit(Unit)
                     return@launch
                 }
-                promoteDeferredErrorIfReady(deferredErrorSnapshot)
+
                 // Server still unreachable — confirm offline state and back off.
                 _uiState.update { it.copy(isOffline = true) }
                 intervalMs = (intervalMs * 2).coerceAtMost(maxIntervalMs)
+                msUntilNextProbe = intervalMs
             }
 
             // Timed out after ~60 s: give up, leave error screen, stop spinning.

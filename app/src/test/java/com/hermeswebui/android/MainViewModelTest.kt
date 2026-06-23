@@ -364,6 +364,40 @@ class MainViewModelTest {
     }
 
     @Test
+    fun `deferred quick resume error promotes when grace expires even before next probe interval`() = runTest(testDispatcher) {
+        var now = 40_000L
+        val viewModel = MainViewModel(
+            FakeSettingsStore(),
+            null,
+            defaultServerUrl,
+            defaultDashboardUrl,
+            nowMs = { now },
+            serverReachabilityChecker = { false }
+        )
+
+        viewModel.onPageStarted(defaultServerUrl)
+        viewModel.onPageCommitVisible(defaultServerUrl)
+        viewModel.onPageFinished(defaultServerUrl)
+
+        viewModel.onAppBackgrounded()
+        now += 200L
+        viewModel.onAppForegrounded()
+        viewModel.onPageError("net::ERR_CONNECTION_RESET", isOffline = true)
+        runCurrent()
+        assertThat(viewModel.uiState.value.errorMessage).isNull()
+
+        now += 1_999L
+        advanceTimeBy(1_999L)
+        runCurrent()
+        assertThat(viewModel.uiState.value.errorMessage).isNull()
+
+        now += 1L
+        advanceTimeBy(1L)
+        runCurrent()
+        assertThat(viewModel.uiState.value.errorMessage).isEqualTo("net::ERR_CONNECTION_RESET")
+    }
+
+    @Test
     fun `first load error does not defer native error UI`() = runTest(testDispatcher) {
         var now = 30_000L
         val viewModel = MainViewModel(
