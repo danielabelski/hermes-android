@@ -153,6 +153,7 @@ workflow changes should be made in Hermes WebUI instead.
 | REL-010 | 2026-06-22 | Release | Incremented Android app version metadata to `0.1.7` with `versionCode` 8 and documented release-note scoping so app releases summarize runtime/app changes only (excluding workflow-only and docs-only updates) |
 | BUG-013 | 2026-06-22 | UI | Fixed Issue 8 by adding an **Edit server URL** recovery action to the native error screen so users can reopen Settings and correct a bad saved Hermes server URL without clearing app data |
 | REL-011 | 2026-06-22 | Release | Updated Android app version metadata to `0.1.8` with `versionCode` 9 |
+| BUG-014 | 2026-06-22 | Android compatibility | Fixed WebUI update-notification generated summaries rendering as a clipped/non-scrollable sliver in Android WebView by restoring vertical page scrolling and re-capping the update summary panel's `max-height: min(34vh, 260px)` with the measured viewport height because Android WebView was collapsing that `vh` max-height to `0px` |
 
 ---
 

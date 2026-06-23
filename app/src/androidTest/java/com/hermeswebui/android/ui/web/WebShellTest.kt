@@ -43,6 +43,28 @@ class WebShellTest {
     }
 
     @Test
+    fun errorScreen_showsRetryAndOpenInBrowserButtons() {
+        composeTestRule.setContent {
+            val context = LocalContext.current
+            val fakeWebView = remember { WebView(context) }
+            WebShell(
+                webView = fakeWebView,
+                isLoading = false,
+                hasLoadedContent = false,
+                isOffline = false,
+                errorMessage = "Connection refused",
+                onRefresh = {},
+                onRetry = {},
+                onOpenExternal = {},
+                onOpenSettings = {}
+            )
+        }
+
+        composeTestRule.onNodeWithText("Retry").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Open in browser").assertIsDisplayed()
+    }
+
+    @Test
     fun errorScreen_clickEditServerUrl_invokesOnOpenSettings() {
         var settingsOpened = false
 
@@ -68,6 +90,31 @@ class WebShellTest {
     }
 
     @Test
+    fun errorScreen_clickRetry_invokesOnRetry() {
+        var retryCalled = false
+
+        composeTestRule.setContent {
+            val context = LocalContext.current
+            val fakeWebView = remember { WebView(context) }
+            WebShell(
+                webView = fakeWebView,
+                isLoading = false,
+                hasLoadedContent = false,
+                isOffline = false,
+                errorMessage = "Connection refused",
+                onRefresh = {},
+                onRetry = { retryCalled = true },
+                onOpenExternal = {},
+                onOpenSettings = {}
+            )
+        }
+
+        composeTestRule.onNodeWithText("Retry").performClick()
+
+        assertThat(retryCalled).isTrue()
+    }
+
+    @Test
     fun noError_editServerUrlButton_isNotDisplayed() {
         composeTestRule.setContent {
             val context = LocalContext.current
@@ -88,4 +135,3 @@ class WebShellTest {
         composeTestRule.onAllNodesWithText("Edit server URL").assertCountEquals(0)
     }
 }
-
