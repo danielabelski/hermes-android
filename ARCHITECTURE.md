@@ -32,6 +32,7 @@
 13. Settings updates rewrite encrypted preferences and reload trusted hosts. The Android setup sheet only asks for the Hermes WebUI URL; the dashboard origin is visible and editable in WebUI Settings > System.
 14. On WebView load failure, `MainViewModel` probes `{serverUrl}/api/status` (Hermes WebUI public liveness endpoint) to distinguish "server is down" from a transient content/navigation error. This refines the `isOffline` state and the copy shown to the user in `WebShell`.
 15. `hermes://session/{id}` deep links are handled in `MainActivity.onNewIntent`, navigating the WebView to `{serverUrl}/{id}` — the Hermes WebUI session route contract (see `apps/desktop/src/app/routes.ts: sessionRoute()` in hermes-agent).
+16. An "Application Settings" entry point is injected into the Hermes WebUI sidebar below Help via a document-start WebView shim. This shim clones the Help menu item structure, strips routing attributes, injects a custom phone-outline SVG icon, and binds the click handler to the `hermes://app/settings` deep link, which triggers `MainViewModel.openSettings()` to display the native settings bottom sheet. This keeps native-owned settings (such as multi-server profiles) accessible from within the WebUI without adding a custom native drawer or menu override.
 
 ## Build and release flow
 
@@ -64,8 +65,9 @@
 ## Extensibility points
 
 - Add more deep-link hosts/paths in the `hermes://` scheme (see `AndroidManifest.xml` + `handleDeepLink` in `MainActivity`).
-- Add FCM push notification handlers that map server-originated events to allowlisted Hermes URLs/session IDs.
+- FCM push notification handlers can map server-originated events to allowlisted Hermes URLs/session IDs.
 - Add biometric gate before `WebShell` composable rendering.
 - Add advanced native settings in `ui/settings` + `data/SettingsRepository`.
+- **Multi-server profile support** (Issue #20, in progress): Phase 1 complete (native "Application Settings" entry point injected into WebUI sidebar). Phase 2 will add encrypted multi-server profile storage in `SettingsRepository` with versioned migrations, and extend `SettingsBottomSheet` with profile list, add/edit/delete dialogs, and active-server selector. Phase 3 will implement server-switching logic: validate new server against `UrlPolicy` allowlist, reload WebView, clear cookies and session data from prior server, and persist new active server choice. This keeps multi-server support entirely native (app-owned) and does not modify WebUI UI/behavior.
 - Prefer WebUI-owned navigation/settings for dashboard links; do not write WebUI dashboard config from Android. Open explicitly configured dashboard origins through Custom Tabs rather than an app-owned dashboard WebView unless there is a tested reason to revisit the WebView path.
 - Extend `HermesApiClient` with authenticated calls (e.g. `/api/sessions`) once an API key storage strategy is decided.
