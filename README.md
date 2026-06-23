@@ -38,12 +38,12 @@ To get added, **message [@Paladin173](https://github.com/Paladin173) your Gmail 
 
 Once added, the app will appear in the Play Store for you to install and receive automatic updates.
 
-Current pre-release version: `v0.1.6`.
+Current pre-release version: `v0.1.7`.
 
 Current Android build metadata:
 
-- Version name: `0.1.6`
-- Version code: `7`
+- Version name: `0.1.7`
+- Version code: `8`
 - Application ID: `com.hermeswebui.android`
 - Compile/target SDK: `37`
 
@@ -195,6 +195,7 @@ The workflow in `.github/workflows/release.yml` can then:
 - upload them as workflow artifacts on manual runs
 - attach the APK to a GitHub Release automatically when you push a `v*` tag
 - fail a tag release when the tag, such as `v0.1.6`, does not match the Android `versionName`
+- keep release notes scoped to app/runtime changes in that release (exclude workflow-only and docs-only updates)
 
 For Google Play upload preparation (without Play publishing yet), run the manual
 workflow in `.github/workflows/play-aab.yml`.
@@ -226,7 +227,7 @@ release channel:
 - `build/release/hermes-webui-v<version>.aab` - Play upload artifact (manual workflow)
 
 Before each GitHub release, increment both `appVersionName` and `versionCode` in
-`app/build.gradle.kts`, then push the matching tag, for example `v0.1.6`.
+`app/build.gradle.kts`, then push the matching tag, for example `v0.1.7`.
 
 ---
 
