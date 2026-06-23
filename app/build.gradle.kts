@@ -4,7 +4,8 @@ import java.io.File
 import java.util.Properties
 
 val appVersionName = "0.1.7"
-val githubReleaseArtifactName = "hermes-webui-v$appVersionName-github"
+val distributionArtifactName = "hermes-webui-v$appVersionName"
+val githubReleaseArtifactName = "$distributionArtifactName-github"
 
 val keystoreProperties = Properties().apply {
     val propertiesFile = rootProject.file("keystore.properties")
@@ -72,9 +73,9 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// Use the product name, version, and GitHub channel in generated APK artifacts.
+// Use the product name and version in generated release artifacts.
 base {
-    archivesName.set(githubReleaseArtifactName)
+    archivesName.set(distributionArtifactName)
 }
 
 extensions.configure<ApplicationExtension>("android") {
@@ -114,6 +115,12 @@ extensions.configure<ApplicationExtension>("android") {
                 "proguard-rules.pro"
             )
         }
+        create("github") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+            applicationIdSuffix = ".github"
+            versionNameSuffix = "-github"
+        }
         debug {
             applicationIdSuffix = ".debug"
         }
@@ -135,7 +142,11 @@ extensions.configure<ApplicationExtension>("android") {
     }
 }
 
-tasks.matching { it.name == "assembleRelease" || it.name == "bundleRelease" }.configureEach {
+tasks.matching {
+    it.name == "assembleRelease" ||
+        it.name == "assembleGithub" ||
+        it.name == "bundleRelease"
+}.configureEach {
     dependsOn(verifyReleaseSigning)
 }
 
@@ -178,13 +189,14 @@ tasks.register("stageGithubReleaseApk") {
     group = "distribution"
     description = "Builds the release APK and stages it as build/release/$githubReleaseArtifactName.apk."
     dependsOn(verifyReleaseSigning)
-    dependsOn("assembleRelease")
+    dependsOn("assembleGithub")
 
     doLast {
         copyFirstExistingArtifact(
             candidates = listOf(
-                layout.buildDirectory.file("outputs/apk/release/$githubReleaseArtifactName-release.apk").get().asFile,
-                layout.buildDirectory.file("outputs/apk/release/app-release.apk").get().asFile
+                layout.buildDirectory.file("outputs/apk/github/$githubReleaseArtifactName.apk").get().asFile,
+                layout.buildDirectory.file("outputs/apk/github/$distributionArtifactName-github.apk").get().asFile,
+                layout.buildDirectory.file("outputs/apk/github/app-github.apk").get().asFile
             ),
             target = rootProject.layout.buildDirectory.file("release/$githubReleaseArtifactName.apk").get().asFile
         )

@@ -191,7 +191,7 @@ To create the Base64 keystore value on Windows PowerShell:
 
 The workflow in `.github/workflows/release.yml` can then:
 
-- build and sign one GitHub release APK
+- build and sign one GitHub release APK with application ID `com.hermeswebui.android.github`
 - upload it as a workflow artifact on manual runs
 - create or update a GitHub Release automatically from manual runs using the Gradle Android `versionName`
 - attach the APK to a GitHub Release automatically when you push a matching `v*` tag
@@ -227,6 +227,12 @@ release channel:
 
 - `build/release/hermes-webui-v<version>-github.apk` - GitHub/device APK artifact
 - `build/release/hermes-webui-v<version>.aab` - Play internal testing upload artifact
+
+The GitHub APK is a separate Android app variant: it installs as
+`com.hermeswebui.android.github`, displays as "Hermes WebUI GitHub", and reports
+`<version>-github` from inside the app. The Play AAB keeps the official
+`com.hermeswebui.android` application ID and plain `<version>` version name, so
+both channels can be installed on the same device at the same time.
 
 Before each GitHub release, increment both `appVersionName` and `versionCode` in
 `app/build.gradle.kts`. Manual workflow runs create or update `v<versionName>`

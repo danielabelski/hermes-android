@@ -152,6 +152,7 @@ workflow changes should be made in Hermes WebUI instead.
 | REL-009 | 2026-06-23 | Release | Added a separate manual GitHub Actions workflow (`.github/workflows/play-aab.yml`) that builds/signs a release AAB, renames it to `hermes-webui-v<version>.aab`, and uploads it as an artifact for manual Google Play Console upload until automated Play publishing is wired |
 | REL-010 | 2026-06-22 | Release | Incremented Android app version metadata to `0.1.7` with `versionCode` 8 and documented release-note scoping so app releases summarize runtime/app changes only (excluding workflow-only and docs-only updates) |
 | REL-011 | 2026-06-23 | Release | Wired `.github/workflows/play-aab.yml` to upload the signed `hermes-webui-v<version>.aab` artifact to the Google Play internal testing track using the configured Play service-account secret |
+| REL-012 | 2026-06-23 | Release | Split GitHub APK builds into a separate `github` release build type with `applicationIdSuffix = ".github"` and `versionNameSuffix = "-github"` so sideloaded GitHub builds can install beside Google Play builds |
 
 ---
 
