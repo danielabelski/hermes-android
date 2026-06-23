@@ -188,6 +188,11 @@ class MainViewModel(
          refreshProfiles()
      }
 
+     fun renameServerProfile(profileId: String, newName: String) {
+         settingsRepositoryImpl?.renameProfile(profileId, newName)
+         refreshProfiles()
+     }
+
      private fun refreshProfiles() {
          settingsRepositoryImpl?.let { repo ->
              _serverProfiles.update { repo.getProfiles() }

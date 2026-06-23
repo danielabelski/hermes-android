@@ -697,7 +697,8 @@ class MainActivity : ComponentActivity() {
                         onDismiss = { viewModel.closeSettings() },
                         serverProfiles = serverProfiles,
                         onAddProfile = { name, url -> handleAddServerProfile(name, url) },
-                        onDeleteProfile = { profileId -> handleDeleteServerProfile(profileId) }
+                        onDeleteProfile = { profileId -> handleDeleteServerProfile(profileId) },
+                        onRenameProfile = { profileId, newName -> viewModel.renameServerProfile(profileId, newName) }
                     )
                 }
             }

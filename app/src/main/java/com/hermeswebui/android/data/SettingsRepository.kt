@@ -129,6 +129,14 @@ class SettingsRepository(context: Context) : SettingsStore {
         }
     }
 
+    fun renameProfile(profileId: String, newName: String) {
+        val profiles = getProfiles().map { profile ->
+            if (profile.id == profileId) profile.copy(name = newName.trim().ifBlank { profile.url })
+            else profile
+        }
+        saveProfiles(profiles)
+    }
+
     fun getProfiles(): List<ServerProfile> {
         val json = sharedPreferences.getString(KEY_SERVER_PROFILES, "[]") ?: "[]"
         return try {
