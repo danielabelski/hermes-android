@@ -82,7 +82,7 @@ jobs:
           serviceAccountJson: signing/google-play-service-account.json
           packageName: com.hermeswebui.android
           releaseFiles: build/release/*.aab
-          track: internal
+          tracks: internal
           status: completed
           releaseName: Hermes WebUI Android v${{ steps.release_version.outputs.version_name }}
 
