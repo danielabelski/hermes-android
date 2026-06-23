@@ -59,6 +59,10 @@ This repository is the standalone Android app.
 - Treat `applicationId` and `namespace` as release-critical identity. Do not
   change either without an explicit user decision. The finalized pre-release
   identity is `com.hermeswebui.android`.
+- Preserve the channel identity split: Google Play builds use the official
+  `release` build type and `com.hermeswebui.android`; GitHub APK builds use the
+  `github` build type, `com.hermeswebui.android.github`, and a `-github`
+  version name suffix so both channels can install side by side.
 
 ## Product direction
 

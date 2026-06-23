@@ -154,6 +154,8 @@ workflow changes should be made in Hermes WebUI instead.
 | BUG-013 | 2026-06-22 | UI | Fixed Issue 8 by adding an **Edit server URL** recovery action to the native error screen so users can reopen Settings and correct a bad saved Hermes server URL without clearing app data |
 | REL-011 | 2026-06-22 | Release | Updated Android app version metadata to `0.1.8` with `versionCode` 9 |
 | BUG-014 | 2026-06-22 | Android compatibility | Fixed WebUI update-notification generated summaries rendering as a clipped/non-scrollable sliver in Android WebView by restoring vertical page scrolling and re-capping the update summary panel's `max-height: min(34vh, 260px)` with the measured viewport height because Android WebView was collapsing that `vh` max-height to `0px` |
+| REL-012 | 2026-06-23 | Release | Wired `.github/workflows/play-aab.yml` to upload the signed `hermes-webui-v<version>.aab` artifact to the Google Play internal testing track using the configured Play service-account secret |
+| REL-013 | 2026-06-23 | Release | Split GitHub APK builds into a separate `github` release build type with `applicationIdSuffix = ".github"` and `versionNameSuffix = "-github"` so sideloaded GitHub builds can install beside Google Play builds |
 
 ---
 

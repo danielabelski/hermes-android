@@ -191,21 +191,22 @@ To create the Base64 keystore value on Windows PowerShell:
 
 The workflow in `.github/workflows/release.yml` can then:
 
-- build and sign one GitHub release APK
-- upload them as workflow artifacts on manual runs
+- build and sign one GitHub release APK with application ID `com.hermeswebui.android.github`
+- upload it as a workflow artifact on manual runs
 - create or update a GitHub Release automatically from manual runs using the Gradle Android `versionName`
 - attach the APK to a GitHub Release automatically when you push a matching `v*` tag
 - fail a tag release when the tag, such as `v0.1.8`, does not match the Android `versionName`
 - keep release notes scoped to app/runtime changes in that release (exclude workflow-only and docs-only updates)
 
-For Google Play upload preparation (without Play publishing yet), run the manual
-workflow in `.github/workflows/play-aab.yml`.
+For Google Play internal testing upload, run the manual workflow in
+`.github/workflows/play-aab.yml`.
 
 It will:
 
 - build and sign one release AAB
 - rename it to `hermes-webui-v<version>.aab`
-- upload it as a GitHub Actions artifact for manual download and Play Console upload
+- upload it as a GitHub Actions artifact for local inspection
+- upload it to the Google Play internal testing track using the configured Play service account
 
 Google Play listing assets:
 
@@ -225,7 +226,13 @@ Gradle's ignored build output directory with the product name, version, and
 release channel:
 
 - `build/release/hermes-webui-v<version>-github.apk` - GitHub/device APK artifact
-- `build/release/hermes-webui-v<version>.aab` - Play upload artifact (manual workflow)
+- `build/release/hermes-webui-v<version>.aab` - Play internal testing upload artifact
+
+The GitHub APK is a separate Android app variant: it installs as
+`com.hermeswebui.android.github`, displays as "Hermes WebUI GitHub", and reports
+`<version>-github` from inside the app. The Play AAB keeps the official
+`com.hermeswebui.android` application ID and plain `<version>` version name, so
+both channels can be installed on the same device at the same time.
 
 Before each GitHub release, increment both `appVersionName` and `versionCode` in
 `app/build.gradle.kts`. Manual workflow runs create or update `v<versionName>`
