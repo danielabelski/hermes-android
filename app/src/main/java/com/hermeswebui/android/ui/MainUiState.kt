@@ -11,5 +11,6 @@ data class MainUiState(
     val errorMessage: String? = null,
     val isSettingsVisible: Boolean = false,
     val pendingShareBanner: String? = null,
-    val currentUrl: String = settings.serverUrl
+    val currentUrl: String = settings.serverUrl,
+    val backgroundReconnectEnabled: Boolean = false
 )

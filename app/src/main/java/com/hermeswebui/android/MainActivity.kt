@@ -86,7 +86,7 @@ import com.hermeswebui.android.domain.ServerUrlValidator
 import com.hermeswebui.android.domain.ShareIntentParser
 import com.hermeswebui.android.ui.MainViewModel
 import com.hermeswebui.android.ui.MainViewModelFactory
-import com.hermeswebui.android.ui.settings.SettingsBottomSheet
+import com.hermeswebui.android.ui.settings.SettingsScreen
 import com.hermeswebui.android.ui.web.WebShell
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -761,24 +761,24 @@ class MainActivity : ComponentActivity() {
             }
 
             if (uiState.isSettingsVisible) {
-                ModalBottomSheet(
-                    onDismissRequest = { viewModel.closeSettings() },
-                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-                ) {
-                    SettingsBottomSheet(
-                        initialServerUrl = uiState.settings.serverUrl,
-                        isConfigured = uiState.settings.isConfigured,
-                        onSave = onSaveSettings,
-                        onResetSession = onResetSession,
-                        onDismiss = { viewModel.closeSettings() },
-                        serverProfiles = serverProfiles,
-                        onAddProfile = { name, url -> handleAddServerProfile(name, url) },
-                        onDeleteProfile = { profileId -> handleDeleteServerProfile(profileId) },
-                        onRenameProfile = { profileId, newName -> viewModel.renameServerProfile(profileId, newName) },
-                        onEditProfile = { profileId, newName, newUrl -> handleEditServerProfile(profileId, newName, newUrl) },
-                        onSwitchProfile = { profileId -> handleSwitchServerProfile(profileId) }
-                    )
-                }
+                SettingsScreen(
+                    initialServerUrl = uiState.settings.serverUrl,
+                    isConfigured = uiState.settings.isConfigured,
+                    backgroundReconnectEnabled = uiState.backgroundReconnectEnabled,
+                    serverProfiles = serverProfiles,
+                    onSave = onSaveSettings,
+                    onResetSession = onResetSession,
+                    onDismiss = { viewModel.closeSettings() },
+                    onSetBackgroundReconnect = { enabled ->
+                        viewModel.setBackgroundReconnectEnabled(enabled)
+                        syncReconnectForegroundService(viewModel.uiState.value.isReconnecting)
+                    },
+                    onAddProfile = { name, url -> handleAddServerProfile(name, url) },
+                    onDeleteProfile = { profileId -> handleDeleteServerProfile(profileId) },
+                    onRenameProfile = { profileId, newName -> viewModel.renameServerProfile(profileId, newName) },
+                    onEditProfile = { profileId, newName, newUrl -> handleEditServerProfile(profileId, newName, newUrl) },
+                    onSwitchProfile = { profileId -> handleSwitchServerProfile(profileId) }
+                )
             }
         }
     }
@@ -1156,7 +1156,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun syncReconnectForegroundService(isReconnecting: Boolean) {
-        if (activityVisible || !isReconnecting) {
+        if (!viewModel.uiState.value.backgroundReconnectEnabled || activityVisible || !isReconnecting) {
             stopReconnectForegroundService()
             return
         }

@@ -30,7 +30,7 @@ class SettingsRepository(context: Context) : SettingsStore {
 
     private fun runMigration() {
         val lastMigrationVersion = sharedPreferences.getInt(KEY_LAST_MIGRATION_VERSION, 0)
-        val currentMigrationVersion = 2 // Increment this when adding new migrations
+        val currentMigrationVersion = 3 // Increment this when adding new migrations
 
         if (lastMigrationVersion < 1) {
             // Migration 1: Clear dashboard URLs from pre-0.1.5 versions
@@ -46,6 +46,13 @@ class SettingsRepository(context: Context) : SettingsStore {
                 val profile = ServerProfile(name = "Default", url = oldUrl, isActive = true)
                 saveProfiles(listOf(profile))
                 setActiveProfile(profile.id)
+            }
+        }
+
+        if (lastMigrationVersion < 3) {
+            // Migration 3: Default background reconnect notification to opt-in (disabled)
+            if (!sharedPreferences.contains(KEY_BACKGROUND_RECONNECT_ENABLED)) {
+                sharedPreferences.edit { putBoolean(KEY_BACKGROUND_RECONNECT_ENABLED, false) }
             }
         }
 
@@ -102,6 +109,14 @@ class SettingsRepository(context: Context) : SettingsStore {
 
     fun markNotificationPermissionRequested() {
         sharedPreferences.edit { putBoolean(KEY_NOTIFICATION_PERMISSION_REQUESTED, true) }
+    }
+
+    fun isBackgroundReconnectEnabled(): Boolean {
+        return sharedPreferences.getBoolean(KEY_BACKGROUND_RECONNECT_ENABLED, false)
+    }
+
+    fun setBackgroundReconnectEnabled(enabled: Boolean) {
+        sharedPreferences.edit { putBoolean(KEY_BACKGROUND_RECONNECT_ENABLED, enabled) }
     }
 
     override fun saveLastLoadedUrl(url: String) {
@@ -200,6 +215,7 @@ class SettingsRepository(context: Context) : SettingsStore {
         private const val KEY_LAST_URL = "last_url"
         private const val KEY_IS_CONFIGURED = "is_configured"
         private const val KEY_NOTIFICATION_PERMISSION_REQUESTED = "notification_permission_requested"
+        private const val KEY_BACKGROUND_RECONNECT_ENABLED = "background_reconnect_enabled"
         private const val KEY_LAST_MIGRATION_VERSION = "last_migration_version"
         // Profile-related keys
         private const val KEY_SERVER_PROFILES = "server_profiles"

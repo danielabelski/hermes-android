@@ -35,7 +35,10 @@ class MainViewModel(
 
     private val settings = settingsRepository.getSettings(defaultUrl, defaultDashboardUrl)
 
-    private val _uiState = MutableStateFlow(MainUiState(settings = settings))
+    private val _uiState = MutableStateFlow(MainUiState(
+        settings = settings,
+        backgroundReconnectEnabled = settingsRepositoryImpl?.isBackgroundReconnectEnabled() ?: false
+    ))
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
     // Server profiles state
@@ -326,6 +329,11 @@ class MainViewModel(
 
     fun closeSettings() {
         _uiState.update { it.copy(isSettingsVisible = false) }
+    }
+
+    fun setBackgroundReconnectEnabled(enabled: Boolean) {
+        settingsRepositoryImpl?.setBackgroundReconnectEnabled(enabled)
+        _uiState.update { it.copy(backgroundReconnectEnabled = enabled) }
     }
 
     fun saveAppUrls(serverUrl: String, dashboardUrl: String) {
