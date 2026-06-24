@@ -69,6 +69,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.ViewModelProvider
 import androidx.webkit.JavaScriptReplyProxy
 import androidx.webkit.ScriptHandler
@@ -76,6 +77,7 @@ import androidx.webkit.WebMessageCompat
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import com.hermeswebui.android.background.HermesReconnectService
 import com.hermeswebui.android.core.security.NavigationDecision
 import com.hermeswebui.android.core.security.UrlOrigins
 import com.hermeswebui.android.core.security.UrlPolicy
@@ -86,6 +88,7 @@ import com.hermeswebui.android.ui.MainViewModel
 import com.hermeswebui.android.ui.MainViewModelFactory
 import com.hermeswebui.android.ui.settings.SettingsBottomSheet
 import com.hermeswebui.android.ui.web.WebShell
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 private const val HermesNotificationBridgeName = "HermesAndroidNotifications"
@@ -507,6 +510,8 @@ class MainActivity : ComponentActivity() {
     private var notificationBridgeScriptHandler: ScriptHandler? = null
     private var routeRecoveryScriptHandler: ScriptHandler? = null
     private var appSettingsEntryScriptHandler: ScriptHandler? = null
+    private var activityVisible = false
+    private var reconnectServiceRunning = false
 
     private var activeOAuthPopup: WebView? = null
     private var oauthFlowTimeoutMs: Long = 0
@@ -581,6 +586,12 @@ class MainActivity : ComponentActivity() {
             )
         }
 
+        lifecycleScope.launch {
+            viewModel.uiState.collect { state ->
+                syncReconnectForegroundService(state.isReconnecting)
+            }
+        }
+
         val settings = viewModel.uiState.value.settings
         if (!settings.isConfigured) {
             viewModel.openSettings()
@@ -607,9 +618,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        activityVisible = true
+    }
+
     override fun onResume() {
         super.onResume()
         if (::webView.isInitialized) {
+            activityVisible = true
+            stopReconnectForegroundService()
             viewModel.onAppForegrounded()
             updateWebNotificationPermissionState()
             viewModel.resumeAutoRetryIfNeeded()
@@ -627,8 +645,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
-        // Avoid background polling; restart on resume if the error screen is still active.
-        viewModel.cancelAutoRetry()
+        activityVisible = false
+        syncReconnectForegroundService(viewModel.uiState.value.isReconnecting)
+        if (!viewModel.uiState.value.isReconnecting) {
+            // Avoid background polling unless the reconnect foreground service is actively holding
+            // the bounded retry loop alive for a just-backgrounded recovery attempt.
+            viewModel.cancelAutoRetry()
+        }
         // Clean up any lingering OAuth popup on app stop.
         cleanupExpiredOAuthPopup()
     }
@@ -1130,6 +1153,31 @@ class MainActivity : ComponentActivity() {
             description = "Task completion and attention notifications from Hermes WebUI"
         }
         getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
+    }
+
+    private fun syncReconnectForegroundService(isReconnecting: Boolean) {
+        if (activityVisible || !isReconnecting) {
+            stopReconnectForegroundService()
+            return
+        }
+        if (reconnectServiceRunning) return
+
+        try {
+            HermesReconnectService.start(this, viewModel.uiState.value.settings.serverUrl)
+            reconnectServiceRunning = true
+        } catch (_: IllegalStateException) {
+            reconnectServiceRunning = false
+            viewModel.cancelAutoRetry()
+        } catch (_: SecurityException) {
+            reconnectServiceRunning = false
+            viewModel.cancelAutoRetry()
+        }
+    }
+
+    private fun stopReconnectForegroundService() {
+        if (!reconnectServiceRunning) return
+        HermesReconnectService.stop(this)
+        reconnectServiceRunning = false
     }
 
     @SuppressLint("MissingPermission")

@@ -16,7 +16,7 @@ surface and source of conversation behavior.
 ## Current status
 
 - Stage 0 is in progress (discovery + contract decisions).
-- Stage 1 / Part A is in progress: lifecycle signal plumbing, reconnect UX polish, tests, and docs updates are landing on `issue-10-background-continuity-plan`.
+- Stage 1 / Part A is complete: lifecycle signal plumbing, reconnect UX polish, a bounded background reconnect hold, tests, and docs updates have landed on `issue-10-background-continuity-plan`.
 - Stage 2/3 implementation has not started yet.
 
 ## Outcome targets
