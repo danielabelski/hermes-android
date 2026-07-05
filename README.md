@@ -284,6 +284,5 @@ security model.
 - [ARCHITECTURE.md](./ARCHITECTURE.md) - runtime flow, boundaries, and extension points
 - [RELEASE.md](./RELEASE.md) - release operator workflow and retry path
 - [AGENTS.md](./AGENTS.md) - repository instructions for AI assistants
-- [ISSUE_10_BACKGROUND_EXECUTION_PROPOSAL.md](./docs/proposals/ISSUE_10_BACKGROUND_EXECUTION_PROPOSAL.md) - background execution proposal
-- [ISSUE_10_BACKGROUND_EXECUTION_WORKPLAN.md](./docs/proposals/ISSUE_10_BACKGROUND_EXECUTION_WORKPLAN.md) - staged execution plan
-- [ISSUE_10_STAGE0_DISCOVERY.md](./docs/proposals/ISSUE_10_STAGE0_DISCOVERY.md) - verified discovery notes and contract questions
+- [projects/](./projects/) - active project notes and implementation plans
+- [assets/](./assets/) - README images, branding assets, icons, and TWA handoff files

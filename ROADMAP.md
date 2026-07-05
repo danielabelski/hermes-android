@@ -84,12 +84,12 @@ workflow changes should be made in Hermes WebUI instead.
 - [ ] Evaluate a Trusted Web Activity (TWA) variant rendered in real Chrome, gated on Hermes WebUI serving `/.well-known/assetlinks.json` (draft + fingerprint in `assets/twa/`); accept loss of native bridges and HTTPS-only verification before pursuing
 - [x] Final package/application ID decision before first public release
 - [x] Release signing automation docs and snippets
-- [~] Background continuity while app is backgrounded (Issue 10): Part A is complete; Part B ongoing activity notification and initial Part C tray approvals are implemented. Remaining work is focused on B4 lifecycle/manual validation and cross-client SSE/API contract hardening tracked in `docs/proposals/ISSUE_10_BACKGROUND_EXECUTION_PROPOSAL.md`.
+- [~] Background continuity while app is backgrounded (Issue 10): Part A is complete; Part B ongoing activity notification and initial Part C tray approvals are implemented. Remaining work is focused on B4 lifecycle/manual validation and cross-client SSE/API contract hardening.
 
 ### Native improvement proposals (2026-07-02, post code-review)
 
-Wishlist from a line-by-line committee review. Full rationale + implementation
-sketches in `docs/proposals/ANDROID_NATIVE_IMPROVEMENTS.md`.
+Wishlist from a line-by-line committee review. Full rationale and implementation
+sketches are captured inline below.
 
 - [ ] Scope cleartext to the configured host via `network_security_config` (A1, security)
 - [ ] Optional TLS/certificate pinning for the configured host (A2, security)
@@ -114,7 +114,7 @@ sketches in `docs/proposals/ANDROID_NATIVE_IMPROVEMENTS.md`.
 | M-002 | As needed | Open | Security | Keep WebView, URL policy, permissions, and encrypted settings behavior hardened | Preserve HTTP/HTTPS configured-host support and host allowlist enforcement |
 | M-003 | As needed | Open | Bugfix | Fix Android-wrapper regressions | Scope to WebView hosting, permissions, share/download, notifications, deep links, settings, and release flow |
 | M-004 | As needed | Open | Release | Keep signed release automation current | Maintain alignment between Gradle metadata, `keystore.properties.example`, and GitHub Actions secrets |
-| M-005 | High | In progress | Platform | Triage and stage Issue 10 background-execution work (A/B/C phases) | Proposal documented in `docs/proposals/ISSUE_10_BACKGROUND_EXECUTION_PROPOSAL.md`; Stage 0 discovery and execution tracking live in `docs/proposals/ISSUE_10_STAGE0_DISCOVERY.md` and `docs/proposals/ISSUE_10_BACKGROUND_EXECUTION_WORKPLAN.md`; Part A is complete, Part B ongoing activity updates are implemented (with reconnect using `/api/sessions/events` plus polling fallback), and initial Part C tray approvals are implemented with queue-head validation through `/api/approval/pending` before `/api/approval/respond`; remaining scope is B4 lifecycle/manual validation plus broader cross-client payload/API contract hardening |
+| M-005 | High | In progress | Platform | Triage and stage Issue 10 background-execution work (A/B/C phases) | Part A is complete, Part B ongoing activity updates are implemented (with reconnect using `/api/sessions/events` plus polling fallback), and initial Part C tray approvals are implemented with queue-head validation through `/api/approval/pending` before `/api/approval/respond`; remaining scope is B4 lifecycle/manual validation plus broader cross-client payload/API contract hardening |
 | UX-002 | Medium | Done | Settings | Server health check before switching | Tapping a saved non-current server now probes readiness first, shows reachable/auth-required/setup/offline/non-Hermes status, asks for confirmation before switching, blocks unsafe switches by default, and records safe diagnostic breadcrumbs for the check result |
 | A-020-P2 | Medium | Open | Settings | Multi-server profile storage (Issue #20 Phase 2) | Add encrypted multi-server profile persistence in `SettingsRepository` with versioned migration; extend `SettingsBottomSheet` UI with profile list, add/edit/delete dialogs, and active server selector |
 | A-020-P3 | Medium | Open | Navigation | Multi-server profile switching (Issue #20 Phase 3) | Implement profile activation flow: reload WebView with new server, clear old session/cookies, validate new server against allowlist, update dashboard config, run comprehensive profile CRUD and switching tests |
