@@ -67,16 +67,27 @@ object HermesWebUiScripts {
           var repairCollapsedPanels = function(height) {
             var maxPanel = Math.max(180, Math.round(height * 0.82)) + 'px';
             var minPanel = Math.max(120, Math.round(height * 0.35)) + 'px';
+            var collapsedThreshold = Math.max(48, Math.min(180, Math.round(height * 0.16)));
             var selectors = [
               '[role="dialog"]',
               '.modal',
               '.dialog',
               '.popover',
               '.dropdown-menu',
+              '.menu',
+              '.drawer',
+              '.sheet',
+              '.panel',
               '[class*="theme"]',
               '[id*="theme"]',
               '[class*="creator"]',
               '[id*="creator"]',
+              '[class*="kanban"]',
+              '[id*="kanban"]',
+              '[class*="board"]',
+              '[id*="board"]',
+              '[class*="popup"]',
+              '[id*="popup"]',
               '[style*="vh"]',
               '[style*="dvh"]'
             ].join(', ');
@@ -87,11 +98,30 @@ object HermesWebUiScripts {
               var scrollHeight = el.scrollHeight || 0;
               var text = normalizedText(el.textContent);
               var isThemeCreatorLike = text.indexOf('theme creator') !== -1;
+              var className = normalizedText(el.className);
+              var id = normalizedText(el.id);
+              var isLikelyOverlay =
+                className.indexOf('modal') !== -1 ||
+                className.indexOf('dialog') !== -1 ||
+                className.indexOf('popover') !== -1 ||
+                className.indexOf('dropdown') !== -1 ||
+                className.indexOf('popup') !== -1 ||
+                className.indexOf('sheet') !== -1 ||
+                id.indexOf('modal') !== -1 ||
+                id.indexOf('dialog') !== -1 ||
+                id.indexOf('popover') !== -1 ||
+                id.indexOf('popup') !== -1;
+              var isLikelyBoard =
+                className.indexOf('kanban') !== -1 ||
+                className.indexOf('board') !== -1 ||
+                id.indexOf('kanban') !== -1 ||
+                id.indexOf('board') !== -1;
+              var hasOverflowMismatch = scrollHeight > rect.height + 96;
 
               // Ignore tiny controls/chips that happen to match selector text.
               if (rect.width < 160) return;
 
-              if (rect.height > 28) {
+              if (rect.height > collapsedThreshold && !hasOverflowMismatch) {
                 // Remove stale repair markers once the panel is healthy again.
                 if (el.getAttribute(repairedAttr) === repairedCollapsedValue) {
                   el.style.removeProperty('height');
@@ -105,7 +135,8 @@ object HermesWebUiScripts {
               }
               // Only repair truly collapsed containers that still have meaningful content.
               if (rect.height <= 0) return;
-              if (!isThemeCreatorLike && scrollHeight < 80) return;
+              if (!isThemeCreatorLike && !isLikelyOverlay && !isLikelyBoard && !hasOverflowMismatch) return;
+              if (!isThemeCreatorLike && !hasOverflowMismatch && scrollHeight < 80) return;
 
               el.style.height = 'auto';
               el.style.minHeight = minPanel;
@@ -132,6 +163,7 @@ object HermesWebUiScripts {
             if (!height) return;
 
             var px = Math.round(height) + 'px';
+            var viewportWidth = window.visualViewport && window.visualViewport.width || window.innerWidth || 0;
             // Hermes WebUI floating menus cap their height with `max-height: calc(100vh - 16px)`,
             // the generated update-summary panel uses `max-height: min(34vh, 260px)`, and the
             // phone/short-viewport approval panel uses `max-height: min(60dvh, 420px)`.
@@ -173,6 +205,7 @@ object HermesWebUiScripts {
               'body { overflow-x: hidden !important; }',
               '.layout, .rail, .sidebar, #sessionList, .messages { min-height: 0 !important; }',
               '.session-action-menu, .workspace-prefs-menu { max-height: ' + menuMax + ' !important; }',
+              '[role="dialog"], .modal, .dialog, .popover, .dropdown-menu { max-height: ' + menuMax + ' !important; }',
               '#updateSummaryPanel { max-height: ' + updateSummaryMax + ' !important; overflow-y: auto !important; }',
               '#updateSummaryScroll { max-height: ' + updateSummaryMax + ' !important; overflow-y: auto !important; }',
               '#updateSummaryPanel.update-summary-expanded #updateSummaryScroll { max-height: ' + updateSummaryExpandedMax + ' !important; }',
@@ -181,6 +214,11 @@ object HermesWebUiScripts {
                 : ''),
               (approvalNeedsViewportCap
                 ? '.approval-card:not(.collapsed) .approval-inner { box-sizing: border-box !important; max-height: ' + approvalMax + 'px !important; overflow-y: auto !important; }'
+                : ''),
+              // Fix Settings page overflow on narrow viewports: the .main-view container inside
+              // .main.showing-settings has inline max-height that clips content - override with none
+              (viewportWidth > 0 && viewportWidth <= 600
+                ? '.main.showing-settings .main-view { max-height: none !important; overflow-y: auto !important; }'
                 : '')
             ].join('\n');
 
