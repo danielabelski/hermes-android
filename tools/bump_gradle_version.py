@@ -99,7 +99,14 @@ def main() -> int:
 
     # Prevent accidental backward/duplicate updates if Gradle is already ahead.
     if parse_semver(next_version) <= parse_semver(current_version):
-        next_version = bump_patch(parse_semver(current_version))
+        current_major, _, _ = parse_semver(current_version)
+        source_major, _, _ = parse_semver(source_raw)
+        if current_major > source_major:
+            # Developer intentionally set a new major version (e.g. 1.0.0 after
+            # a 0.x.y tag). Preserve it as-is rather than bumping the patch.
+            next_version = current_version
+        else:
+            next_version = bump_patch(parse_semver(current_version))
 
     updated = replace_version(contents, next_version)
     gradle_path.write_text(updated, encoding="utf-8")
