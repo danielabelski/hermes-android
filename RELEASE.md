@@ -31,7 +31,7 @@ That workflow:
 1. Builds and signs `hermes-webui-v<version>-github.apk`.
 1. Builds and signs `hermes-webui-v<version>.aab`.
 1. Uploads both files as workflow artifacts.
-1. Starts `2 - Publish GitHub APK` and `3 - Publish Play Store Release` in parallel.
+1. Publishes the GitHub APK and Play production AAB in the same orchestration run.
 
 The GitHub publish workflow attaches only the `-github.apk` to the GitHub
 Release and writes human-readable generated GitHub release notes grouped by
@@ -57,8 +57,11 @@ Then manually rerun only the failed workflow:
 
 - `2 - Publish GitHub APK` needs the GitHub APK artifact name, build run ID,
   commit SHA, tag name, and version name.
-- `3 - Publish Play Store Release` needs the Play AAB artifact name, build run
+- `3 - Publish Play Store Production` needs the Play AAB artifact name, build run
   ID, commit SHA, tag name, and version name.
+
+If you want an open-testing/beta release later, run `Play Store Beta (Manual)`
+manually with the same Play AAB artifact metadata.
 
 Do not rerun `1 - Orchestration Release` just to retry one failed publish
 target unless the build artifacts are missing or expired.

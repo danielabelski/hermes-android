@@ -1,7 +1,8 @@
-name: 4 - Promote to Play Production
+name: 3 - Publish Play Store Production
 
-# Manually promotes an existing open-testing (beta) build to the Play
-# production track. Run this after validating the open-testing build.
+# Manually publishes an existing orchestration AAB artifact to the Play
+# production track. Use this to retry Play production publishing without
+# rebuilding artifacts.
 # Inputs come from the "Manual Publish Retry Details" summary of the
 # 1 - Orchestration Release run that built the artifacts.
 
@@ -34,12 +35,12 @@ permissions:
   actions: read
 
 concurrency:
-  group: promote-play-production-${{ inputs.version_name }}
+  group: publish-play-store-production-${{ inputs.version_name }}
   cancel-in-progress: false
 
 jobs:
-  promote-play-production:
-    name: 4 - Promote to Play Production
+  publish-play-production:
+    name: 3 - Publish Play Store Production
     runs-on: ubuntu-latest
 
     steps:

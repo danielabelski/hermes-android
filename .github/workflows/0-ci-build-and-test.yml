@@ -1,4 +1,4 @@
-name: Build & Test
+name: 0 - CI Build & Test
 
 # Build + unit-test gate for pushes and PRs. The repo previously had only the
 # signed-release workflows (1/2/3-*), so nothing compiled or tested changes on a
@@ -11,7 +11,8 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Queue newer runs instead of canceling active ones so CI statuses are stable.
+  cancel-in-progress: false
 
 permissions:
   contents: read

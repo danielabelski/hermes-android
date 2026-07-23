@@ -169,16 +169,16 @@ When package identity, release signing, store distribution, or public release
 behavior changes, update `ROADMAP.md` and `README.md` in the same change.
 
 The repo uses four workflows for building and releasing:
-- `.github/workflows/1-orchestration-release.yml` — single signed release entry point; builds both the GitHub APK and Play AAB, then fans out to workflows 2 and 3.
+- `.github/workflows/1-orchestration-release.yml` — single signed release entry point; builds both the GitHub APK and Play AAB, then publishes GitHub and Play production in one run.
 - `.github/workflows/2-publish-github-apk.yml` — publishes the signed APK to GitHub Releases.
-- `.github/workflows/3-publish-play-store-release.yml` — submits the AAB to the Play **open testing (beta)** track after every orchestrated build.
-- `.github/workflows/4-promote-play-production.yml` — **manual only**; promotes a beta build to the Play **production** track. Run this after validating open testing. Inputs come from the "Manual Publish Retry Details" summary of the orchestration run.
+- `.github/workflows/3-publish-play-store-production.yml` — publishes the AAB to the Play **production** track.
+- `.github/workflows/play-store-beta-manual.yml` — optional/manual workflow that submits the AAB to the Play **open testing (beta)** track when needed.
 
 Keep all four workflows aligned with `app/build.gradle.kts`,
 `keystore.properties.example`, and the documented GitHub secrets whenever the
 release flow changes. The GitHub publish workflow should publish only the
-`hermes-webui-v<version>-github.apk` APK, the Play beta workflow should
-submit only the `hermes-webui-v<version>.aab` AAB to the beta track,
+`hermes-webui-v<version>-github.apk` APK, the Play production workflow should
+submit only the `hermes-webui-v<version>.aab` AAB to the production track,
 tag-triggered releases should match the Gradle `versionName`, and the public
 GitHub release body should contain human-readable What's New notes rather than
 build metadata.
@@ -195,7 +195,7 @@ below the Play text limit, and ending with:
 Keep `RELEASE.md` aligned with the workflow operator path whenever release
 automation changes.
 
-Separate from release publishing, CI uses `.github/workflows/ci.yml` to run `testDebugUnitTest` + `assembleDebug` on pushes/PRs without signing secrets. Keep contributor verification steps aligned with this gate when changing build/test flow.
+Separate from release publishing, CI uses `.github/workflows/0-ci-build-and-test.yml` to run `testDebugUnitTest` + `assembleDebug` on pushes/PRs without signing secrets. Keep contributor verification steps aligned with this gate when changing build/test flow.
 
 ## Verification
 

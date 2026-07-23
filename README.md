@@ -247,7 +247,11 @@ Release automation is centered on:
 
 - `.github/workflows/1-orchestration-release.yml`
 - `.github/workflows/2-publish-github-apk.yml`
-- `.github/workflows/3-publish-play-store-release.yml`
+
+Optional/manual Play workflows:
+
+- `.github/workflows/3-publish-play-store-production.yml`
+- `.github/workflows/play-store-beta-manual.yml`
 
 That flow builds:
 

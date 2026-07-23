@@ -200,17 +200,125 @@ jobs:
       tag_name: ${{ needs.build-release-artifacts.outputs.tag_name }}
       version_name: ${{ needs.build-release-artifacts.outputs.version_name }}
 
-  publish-play-open-testing:
-    name: 3 - Publish Play Store Beta
+  publish-play-production:
+    name: 3 - Publish Play Store Production
     needs: build-release-artifacts
-    uses: ./.github/workflows/3-publish-play-store-release.yml
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       actions: read
-    secrets: inherit
-    with:
-      artifact_name: ${{ needs.build-release-artifacts.outputs.play_aab_artifact_name }}
-      build_run_id: ${{ github.run_id }}
-      commit_sha: ${{ needs.build-release-artifacts.outputs.commit_sha }}
-      tag_name: ${{ needs.build-release-artifacts.outputs.tag_name }}
-      version_name: ${{ needs.build-release-artifacts.outputs.version_name }}
+
+    steps:
+      - name: Validate Play service account secret
+        shell: bash
+        run: |
+          test -n "${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64 }}" || { echo "Missing GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64"; exit 1; }
+
+      - name: Download Play AAB artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.build-release-artifacts.outputs.play_aab_artifact_name }}
+          path: build/release
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Validate Play AAB artifact
+        shell: bash
+        run: |
+          aab_count="$(find build/release -maxdepth 1 -type f -name 'hermes-webui-v*.aab' | wc -l | tr -d ' ')"
+          if [ "$aab_count" != "1" ]; then
+            echo "Expected exactly one Play AAB artifact, found $aab_count."
+            find build/release -maxdepth 1 -type f -print
+            exit 1
+          fi
+
+      - name: Decode Google Play service account
+        shell: bash
+        run: |
+          mkdir -p signing
+          echo "${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64 }}" | base64 --decode > signing/google-play-service-account.json
+          test -f signing/google-play-service-account.json || { echo "Google Play service account file was not created"; exit 1; }
+
+      - name: Build Play Store changelog
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.build-release-artifacts.outputs.tag_name }}
+          RELEASE_COMMIT: ${{ needs.build-release-artifacts.outputs.commit_sha }}
+        run: |
+          mkdir -p build/play-whatsnew
+
+          generated_notes="$(gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+            -f tag_name="$RELEASE_TAG" \
+            -f target_commitish="$RELEASE_COMMIT" \
+            --jq '.body')"
+
+          export GENERATED_NOTES="$generated_notes"
+          python3 <<'PY' > build/play-whatsnew/whatsnew-en-US
+          import os
+          import re
+
+          max_chars = 480
+          report_line = "Report issues through the in-app bug report tool."
+          notes = os.environ.get("GENERATED_NOTES", "")
+          bullets = []
+
+          for raw_line in notes.splitlines():
+              line = raw_line.strip()
+              if not line:
+                  continue
+              if line.startswith("#"):
+                  continue
+              if "Full Changelog" in line or "compare/" in line:
+                  continue
+              if line.lower().startswith("new contributors"):
+                  continue
+              if line.startswith(("* ", "- ")):
+                  line = "- " + line[2:].strip()
+              else:
+                  continue
+              line = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", line)
+              line = re.sub(r"\s+by\s+@[A-Za-z0-9-]+(?:\s+in\s+#\d+)?$", "", line)
+              line = re.sub(r"\s+in\s+#\d+$", "", line)
+              line = re.sub(r"@[A-Za-z0-9-]+", "", line)
+              line = re.sub(r"#(\d+)", r"issue \1", line)
+              line = line.replace("`", "")
+              line = re.sub(r"\s+", " ", line).strip()
+              if line and line not in bullets:
+                  bullets.append(line)
+
+          if not bullets:
+              bullets = ["- Bug fixes and Android wrapper improvements."]
+
+          output_lines = []
+          for bullet in bullets:
+              candidate_lines = output_lines + [bullet, "", report_line]
+              candidate = "\n".join(candidate_lines)
+              if len(candidate) <= max_chars:
+                  output_lines.append(bullet)
+              if len(output_lines) >= 4:
+                  break
+
+          if not output_lines:
+              output_lines = [bullets[0][: max_chars - len(report_line) - 3].rstrip()]
+
+          text = "\n".join(output_lines + ["", report_line])
+          if len(text) > max_chars:
+              available = max_chars - len(report_line) - 2
+              trimmed = "\n".join(output_lines)
+              text = trimmed[:available].rstrip() + "\n\n" + report_line
+
+          print(text)
+          PY
+          cat build/play-whatsnew/whatsnew-en-US
+
+      - name: Upload AAB to Google Play production
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJson: signing/google-play-service-account.json
+          packageName: com.hermeswebui.android
+          releaseFiles: build/release/*.aab
+          tracks: production
+          status: completed
+          releaseName: Hermes WebUI Android v${{ needs.build-release-artifacts.outputs.version_name }}
+          whatsNewDirectory: build/play-whatsnew
