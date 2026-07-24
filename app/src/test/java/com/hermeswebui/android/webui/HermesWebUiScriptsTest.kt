@@ -65,6 +65,15 @@ class HermesWebUiScriptsTest {
     }
 
     @Test
+    fun `viewport fix script excludes primary chat surface from generic repairs`() {
+        val script = HermesWebUiScripts.viewportFixScript
+
+        assertThat(script).contains("shouldSkipRepairForElement")
+        assertThat(script).contains("el.closest('.messages, #messages, [data-testid=\"messages\"]')")
+        assertThat(script).contains("avoid chat-window flicker")
+    }
+
+    @Test
     fun `viewport fix script includes baseline CSS for layout containers`() {
         val script = HermesWebUiScripts.viewportFixScript
 

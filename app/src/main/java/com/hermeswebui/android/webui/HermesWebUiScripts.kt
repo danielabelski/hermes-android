@@ -96,9 +96,39 @@ object HermesWebUiScripts {
             return SKIP_TAGS[tag] === 1;
           }
 
+          function shouldSkipRepairForElement(el) {
+            if (!el || !el.closest) return false;
+
+            // Keep generic collapse repair off the primary conversation surface to
+            // avoid chat-window flicker from repeated style churn while messages stream.
+            var chatSurface = el.closest('.messages, #messages, [data-testid="messages"]');
+            if (!chatSurface) return false;
+
+            // Keep floating overlays eligible for repair even when they are rendered
+            // inside chat containers.
+            try {
+              var style = window.getComputedStyle(el);
+              if (style && (style.position === 'fixed' || style.position === 'absolute')) {
+                return false;
+              }
+            } catch (e) {}
+
+            return true;
+          }
+
+          function clearRepair(el) {
+            if (!el) return;
+            el.style.removeProperty('height');
+            el.style.removeProperty('min-height');
+            el.style.removeProperty('max-height');
+            el.style.removeProperty('overflow-y');
+            el.removeAttribute(REPAIRED_ATTR);
+          }
+
           function isCollapsedElement(el, viewport) {
             if (!el || !el.getBoundingClientRect) return false;
             if (shouldSkipElement(el)) return false;
+            if (shouldSkipRepairForElement(el)) return false;
 
             var rect = el.getBoundingClientRect();
             var scrollHeight = el.scrollHeight || 0;
@@ -160,11 +190,7 @@ object HermesWebUiScripts {
 
             // Clear repair if element is now naturally healthy
             if (rect.height > threshold && el.scrollHeight <= rect.height + 50) {
-              el.style.removeProperty('height');
-              el.style.removeProperty('min-height');
-              el.style.removeProperty('max-height');
-              el.style.removeProperty('overflow-y');
-              el.removeAttribute(REPAIRED_ATTR);
+              clearRepair(el);
             }
           }
 
@@ -187,6 +213,15 @@ object HermesWebUiScripts {
               var el = elements[i];
 
               if (shouldSkipElement(el)) continue;
+
+              if (shouldSkipRepairForElement(el)) {
+                // If an older run marked a chat element before exclusion was added,
+                // clean that stale repair so normal WebUI layout can take over.
+                if (el.getAttribute(REPAIRED_ATTR)) {
+                  clearRepair(el);
+                }
+                continue;
+              }
 
               // Check if previously repaired element is now healthy
               if (el.getAttribute(REPAIRED_ATTR)) {
