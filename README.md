@@ -292,6 +292,18 @@ security model.
 - [ROADMAP.md](./ROADMAP.md) - project status, maintenance posture, and wishlist
 - [ARCHITECTURE.md](./ARCHITECTURE.md) - runtime flow, boundaries, and extension points
 - [RELEASE.md](./RELEASE.md) - release operator workflow and retry path
+- [AI_USE.md](./AI_USE.md) - AI-assisted development approach, review, validation, and accountability
 - [AGENTS.md](./AGENTS.md) - repository instructions for AI assistants
 - [projects/](./projects/) - active project notes and implementation plans
 - [assets/](./assets/) - README images, branding assets, icons, and TWA handoff files
+
+## AI-assisted Development
+
+Hermes-Android uses AI-assisted development openly as part of implementation,
+investigation, and documentation work.
+
+Architecture, security boundaries, validation criteria, and release decisions
+remain under human ownership. AI output is reviewed as proposed engineering
+work, not treated as authoritative by default.
+
+See [AI_USE.md](./AI_USE.md) for the full policy and workflow.
