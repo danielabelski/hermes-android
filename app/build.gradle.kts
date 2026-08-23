@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.io.File
 import java.util.Properties
 
-val appVersionName = "1.0.24"
+val appVersionName = "1.0.25"
 val appVersionCode = run {
     val semver = Regex("^(\\d+)\\.(\\d+)\\.(\\d+)$")
         .matchEntire(appVersionName)
