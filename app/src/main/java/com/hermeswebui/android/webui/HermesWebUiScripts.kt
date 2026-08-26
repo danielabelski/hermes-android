@@ -25,6 +25,7 @@ object HermesWebUiScripts {
 
           var STYLE_ID = 'hermes-android-viewport-fix';
           var REPAIRED_ATTR = 'data-hermes-android-vh-repaired';
+          var PROMPT_SHIFT_PROPERTY = '--hermes-android-prompt-shift';
           var MAX_REPAIRS_PER_SCAN = 50;
           var MIN_SCAN_INTERVAL_MS = 100;
 
@@ -43,19 +44,32 @@ object HermesWebUiScripts {
           };
 
           function getMeasuredViewport() {
-            var visualHeight = window.visualViewport && window.visualViewport.height;
-            var visualWidth = window.visualViewport && window.visualViewport.width;
+            var root = document.documentElement;
+            var layoutHeight = Math.max(
+              window.innerHeight || 0,
+              root && root.clientHeight || 0
+            );
+            var layoutWidth = Math.max(
+              window.innerWidth || 0,
+              root && root.clientWidth || 0
+            );
+            var visualViewport = window.visualViewport;
+            var reportedVisualHeight = visualViewport && visualViewport.height || 0;
+            var reportedVisualWidth = visualViewport && visualViewport.width || 0;
+            var visualHeight = reportedVisualHeight > 0 ? reportedVisualHeight : layoutHeight;
+            var visualWidth = reportedVisualWidth > 0 ? reportedVisualWidth : layoutWidth;
+            var visualTop = reportedVisualHeight > 0
+              ? Math.max(0, visualViewport.offsetTop || 0)
+              : 0;
             return {
-              height: Math.max(
-                window.innerHeight || 0,
-                document.documentElement.clientHeight || 0,
-                visualHeight || 0
-              ),
-              width: Math.max(
-                window.innerWidth || 0,
-                document.documentElement.clientWidth || 0,
-                visualWidth || 0
-              )
+              // Keep the root shell on the stable layout viewport, but retain the
+              // visual viewport separately for keyboard-constrained prompt geometry.
+              height: Math.max(layoutHeight, visualHeight),
+              width: Math.max(layoutWidth, visualWidth),
+              visualHeight: visualHeight,
+              visualWidth: visualWidth,
+              visualTop: visualTop,
+              visualBottom: visualTop + visualHeight
             };
           }
 
@@ -69,6 +83,8 @@ object HermesWebUiScripts {
             root.style.setProperty('--vw', (viewport.width / 100) + 'px');
             root.style.setProperty('--viewport-height', viewport.height + 'px');
             root.style.setProperty('--viewport-width', viewport.width + 'px');
+            root.style.setProperty('--hermes-android-visual-viewport-height', viewport.visualHeight + 'px');
+            root.style.setProperty('--hermes-android-visual-viewport-top', viewport.visualTop + 'px');
 
             // Baseline CSS rules that generic detection cannot handle
             var style = document.getElementById(STYLE_ID);
@@ -87,24 +103,50 @@ object HermesWebUiScripts {
             // the panel. The card bottom is anchor-invariant (it tracks the composer,
             // not the panel height), so this measurement stays stable across scans and
             // cannot oscillate.
-            var promptPanelMax = Math.min(420, Math.round(viewport.height * 0.68));
+            var promptPanelMax = Math.min(420, Math.round(viewport.visualHeight * 0.68));
+            var promptCard = null;
             try {
-              var promptCard = document.querySelector('.approval-card.visible:not(.collapsed), .clarify-card.visible:not(.collapsed)');
+              promptCard = document.querySelector('.approval-card.visible:not(.collapsed), .clarify-card.visible:not(.collapsed)');
               if (promptCard && promptCard.getBoundingClientRect) {
                 var titlebar = document.querySelector('.app-titlebar');
                 var titlebarBottom = 0;
                 if (titlebar && titlebar.getBoundingClientRect) {
                   titlebarBottom = titlebar.getBoundingClientRect().bottom;
                 }
-                var promptAvailable = promptCard.getBoundingClientRect().bottom - titlebarBottom - 8;
-                if (promptAvailable > 0) {
-                  promptPanelMax = Math.min(promptPanelMax, Math.floor(promptAvailable));
+                var previousShift = parseFloat(
+                  promptCard.style.getPropertyValue(PROMPT_SHIFT_PROPERTY)
+                ) || 0;
+                var anchorBottom = promptCard.getBoundingClientRect().bottom + previousShift;
+                var promptShift = Math.max(0, Math.ceil(anchorBottom - viewport.visualBottom));
+                var promptShiftPx = promptShift + 'px';
+                if (promptCard.style.getPropertyValue(PROMPT_SHIFT_PROPERTY) !== promptShiftPx) {
+                  promptCard.style.setProperty(PROMPT_SHIFT_PROPERTY, promptShiftPx);
+                }
+                var promptBottom = Math.min(anchorBottom, viewport.visualBottom);
+                var promptTop = Math.max(titlebarBottom, viewport.visualTop);
+                var promptAvailable = promptBottom - promptTop - 8;
+                promptPanelMax = Math.min(
+                  promptPanelMax,
+                  Math.max(1, Math.floor(promptAvailable))
+                );
+              }
+            } catch (e) {}
+            try {
+              var inactivePromptCards = document.querySelectorAll('.approval-card, .clarify-card');
+              for (var promptIndex = 0; promptIndex < inactivePromptCards.length; promptIndex++) {
+                var inactivePromptCard = inactivePromptCards[promptIndex];
+                if (
+                  inactivePromptCard !== promptCard &&
+                  inactivePromptCard.style.getPropertyValue(PROMPT_SHIFT_PROPERTY)
+                ) {
+                  inactivePromptCard.style.removeProperty(PROMPT_SHIFT_PROPERTY);
                 }
               }
             } catch (e) {}
-            // Keep the WebUI clamp's 180px floor so the panel stays usable and
-            // scrollable even when the measured space is tight.
-            var promptPanelMaxPx = Math.max(180, promptPanelMax) + 'px';
+            // The WebUI uses a 180px preferred floor, but enforcing that floor when
+            // less space is actually visible puts the panel behind the IME/titlebar.
+            // Fit the real visual viewport and let the inner region scroll instead.
+            var promptPanelMaxPx = Math.max(1, promptPanelMax) + 'px';
 
             style.textContent = [
               // Root sizing baseline
@@ -118,7 +160,7 @@ object HermesWebUiScripts {
                 : ''),
               // Prompt panel (approval/clarify) measured geometry cap. !important beats
               // both the WebUI viewport-unit clamp and any stale inline repair styles.
-              '.approval-card:not(.collapsed), .clarify-card:not(.collapsed) { max-height: ' + promptPanelMaxPx + ' !important; }',
+              '.approval-card:not(.collapsed), .clarify-card:not(.collapsed) { max-height: ' + promptPanelMaxPx + ' !important; transform: translateY(calc(-1 * var(' + PROMPT_SHIFT_PROPERTY + ', 0px))) !important; }',
               '.approval-card:not(.collapsed) .approval-inner, .clarify-card:not(.collapsed) .clarify-inner { box-sizing: border-box !important; max-height: ' + promptPanelMaxPx + ' !important; overflow-y: auto !important; }',
               // The prompt cards float above the composer from inside the
               // zero-height .composer-flyout, so neither the flyout nor the
@@ -180,7 +222,6 @@ object HermesWebUiScripts {
             el.style.removeProperty('height');
             el.style.removeProperty('min-height');
             el.style.removeProperty('max-height');
-            el.style.removeProperty('overflow-y');
             el.removeAttribute(REPAIRED_ATTR);
           }
 
@@ -241,7 +282,9 @@ object HermesWebUiScripts {
             el.style.height = 'auto';
             el.style.minHeight = minPanel;
             el.style.maxHeight = maxPanel;
-            el.style.overflowY = 'auto';
+            // Preserve the element's existing overflow contract. Creating a new
+            // scroll container caused #80, while rewriting an existing inline
+            // overflow value would corrupt the layout when the repair clears.
           }
 
           function repairElement(el, viewport) {
@@ -862,142 +905,126 @@ object HermesWebUiScripts {
         })();
     """.trimIndent()
 
-    val suppressKeyboardForDialogsScript = """
+    val suppressClarifyAutofocusScript = """
         (function() {
-          if (window.__hermesAndroidSuppressKeyboardForDialogsInstalled) return;
-          window.__hermesAndroidSuppressKeyboardForDialogsInstalled = true;
+          if (window.__hermesAndroidSuppressClarifyAutofocusInstalled) return;
+          window.__hermesAndroidSuppressClarifyAutofocusInstalled = true;
 
-          // Issue #65: When the agent calls the Clarify tool (multiple-choice prompt),
-          // programmatic input focus can automatically open the on-screen keyboard and
-          // overlap the option buttons. Suppress that automatic focus without blocking
-          // an explicit tap on an editable dialog field (Issue #90).
+          // Issue #65: WebUI focuses #clarifyInput when a multiple-choice prompt
+          // appears, opening the IME over the choices. Suppress only that automatic
+          // focus once per prompt presentation. Validation/error refocus after the
+          // user interacts remains available. Never inspect unrelated dialogs (#90).
+          var focusIntentUntil = 0;
+          var focusIntentPresentationKey = null;
+          var FOCUS_INTENT_WINDOW_MS = 1000;
+          var PRESENTATION_HANDLED_ATTR = 'data-hermes-android-clarify-focus-handled';
 
-          var explicitlyFocusedInput = null;
-
-          var rememberExplicitInputFocus = function(event) {
-            var target = event.target;
-            if (!target) return;
-            var tag = (target.tagName || '').toLowerCase();
-            var isInput = tag === 'input' || tag === 'textarea' || target.isContentEditable;
-            explicitlyFocusedInput = isInput ? target : null;
+          var isClarifyInput = function(target) {
+            return !!(
+              target &&
+              target.id === 'clarifyInput' &&
+              target.closest &&
+              target.closest('.clarify-card')
+            );
           };
 
-          document.addEventListener('pointerdown', rememberExplicitInputFocus, true);
-          document.addEventListener('touchstart', rememberExplicitInputFocus, true);
-
-          var isDialogLike = function(el) {
-            if (!el) return false;
-            var role = (el.getAttribute('role') || '').toLowerCase();
-            var tag = (el.tagName || '').toLowerCase();
-            
-            // Check for modal/dialog ARIA roles
-            if (role === 'dialog' || role === 'alertdialog') return true;
-            
-            // Check for modal/dialog HTML elements
-            if (tag === 'dialog') return true;
-            
-            // Check for common modal class names
-            var cls = (el.getAttribute('class') || '').toLowerCase();
-            if (cls.indexOf('modal') !== -1 || cls.indexOf('dialog') !== -1 || 
-                cls.indexOf('prompt') !== -1 || cls.indexOf('alert') !== -1) return true;
-            
-            return false;
-          };
-
-          var getDialogContainer = function(el) {
-            if (!el) return null;
-            var current = el;
-            while (current && current !== document.body && current !== document.documentElement) {
-              if (isDialogLike(current)) return current;
-              current = current.parentElement;
-            }
-            return null;
-          };
-
-          var suppressKeyboardForElement = function(el) {
-            if (!el) return;
+          var getClarifyPresentationKey = function(card) {
             try {
-              // Blur the element to hide the keyboard if it gained focus
-              el.blur();
+              if (typeof _clarifyId !== 'undefined' && _clarifyId) {
+                return 'id:' + String(_clarifyId);
+              }
+              if (typeof _clarifySignature !== 'undefined' && _clarifySignature) {
+                return 'signature:' + String(_clarifySignature);
+              }
             } catch (_) {}
+
+            var question = card.querySelector('#clarifyQuestion, .clarify-question');
+            var choices = card.querySelector('#clarifyChoices, .clarify-choices');
+            return 'dom:' +
+              String(question && question.textContent || '') + '\u001f' +
+              String(choices && choices.textContent || '');
           };
 
-          // Listen for focus events on input elements
-          document.addEventListener('focus', function(event) {
+          var rememberClarifyFocusIntent = function(event) {
             var target = event.target;
-            if (!target) return;
-
-            var tag = (target.tagName || '').toLowerCase();
-            var isInput = tag === 'input' || tag === 'textarea' || target.isContentEditable;
-            if (!isInput) return;
-
-            var dialogContainer = getDialogContainer(target);
-            if (!dialogContainer) return;
-
-            if (target === explicitlyFocusedInput) {
-              explicitlyFocusedInput = null;
-              return;
+            if (!target || !target.closest) return;
+            var card = target.closest('.clarify-card.visible');
+            if (!card) return;
+            var presentationKey = getClarifyPresentationKey(card);
+            card.setAttribute(PRESENTATION_HANDLED_ATTR, presentationKey);
+            if (isClarifyInput(target) || target.closest('.clarify-choice.other')) {
+              focusIntentPresentationKey = presentationKey;
+              focusIntentUntil = Date.now() + FOCUS_INTENT_WINDOW_MS;
             }
+          };
 
-            // Suppress programmatic dialog autofocus, but never an explicit user tap.
-            suppressKeyboardForElement(target);
+          document.addEventListener('pointerdown', rememberClarifyFocusIntent, true);
+          document.addEventListener('touchstart', rememberClarifyFocusIntent, true);
+          document.addEventListener('click', rememberClarifyFocusIntent, true);
+          document.addEventListener('keydown', function(event) {
+            if (event.key === 'Tab') {
+              var card = document.querySelector('.clarify-card.visible');
+              if (card) {
+                focusIntentPresentationKey = getClarifyPresentationKey(card);
+                card.setAttribute(PRESENTATION_HANDLED_ATTR, focusIntentPresentationKey);
+              }
+              focusIntentUntil = Date.now() + FOCUS_INTENT_WINDOW_MS;
+            } else {
+              rememberClarifyFocusIntent(event);
+            }
           }, true);
 
-          // Also watch for new dialogs being added to the DOM and suppress focus on their inputs
-          if (window.MutationObserver) {
-            var suppressInputsInDialog = function(dialog) {
-              if (!dialog || !dialog.querySelectorAll) return;
+          var suppressAutomaticClarifyFocus = function(event) {
+            var target = event.target;
+            if (!isClarifyInput(target)) return;
+            var card = target.closest('.clarify-card');
+            var presentationKey = getClarifyPresentationKey(card);
+            if (
+              Date.now() <= focusIntentUntil &&
+              focusIntentPresentationKey === presentationKey
+            ) return;
+            if (card.getAttribute(PRESENTATION_HANDLED_ATTR) === presentationKey) return;
+            card.setAttribute(PRESENTATION_HANDLED_ATTR, presentationKey);
+
+            try {
+              target.blur();
+            } catch (_) {}
+            // Some WebView builds finalize focus after dispatching focusin. Re-check
+            // on the next task so the IME cannot survive that delayed focus commit.
+            window.setTimeout(function() {
+              if (document.activeElement !== target) return;
+              if (
+                Date.now() <= focusIntentUntil &&
+                focusIntentPresentationKey === presentationKey
+              ) return;
               try {
-                var inputs = dialog.querySelectorAll('input, textarea, [contenteditable="true"]');
-                inputs.forEach(function(input) {
-                  if (input && input.blur) {
-                    input.blur();
-                  }
-                  // Prevent auto-focus by marking as temporarily unfocusable
-                  if (input && input.setAttribute) {
-                    var wasTabIndex = input.getAttribute('tabindex');
-                    input.setAttribute('tabindex', '-1');
-                    // Restore tabindex after a small delay to allow dialog to initialize
-                    setTimeout(function() {
-                      if (wasTabIndex !== null && wasTabIndex !== undefined) {
-                        input.setAttribute('tabindex', wasTabIndex);
-                      } else {
-                        input.removeAttribute('tabindex');
-                      }
-                    }, 100);
-                  }
-                });
+                target.blur();
               } catch (_) {}
-            };
+            }, 0);
+          };
 
-            var observer = new MutationObserver(function(mutations) {
-              mutations.forEach(function(mutation) {
-                if (mutation.addedNodes && mutation.addedNodes.length) {
-                  mutation.addedNodes.forEach(function(node) {
-                    if (!node.querySelectorAll) return;
+          document.addEventListener('focusin', suppressAutomaticClarifyFocus, true);
 
-                    // Check if the added node itself is a dialog
-                    if (isDialogLike(node)) {
-                      suppressInputsInDialog(node);
-                    }
-
-                    // Also check for dialogs nested within the added node
-                    try {
-                      var nestedDialogs = node.querySelectorAll('[role="dialog"], [role="alertdialog"], dialog, .modal, .dialog, .prompt, .alert');
-                      nestedDialogs.forEach(function(dialog) {
-                        if (isDialogLike(dialog)) {
-                          suppressInputsInDialog(dialog);
-                        }
-                      });
-                    } catch (_) {}
-                  });
+          if (window.MutationObserver) {
+            var resetCompletedPresentation = function() {
+              var cards = document.querySelectorAll('.clarify-card[' + PRESENTATION_HANDLED_ATTR + ']');
+              for (var i = 0; i < cards.length; i++) {
+                var card = cards[i];
+                if (
+                  !card.classList.contains('visible') ||
+                  card.hidden ||
+                  card.getAttribute('aria-hidden') === 'true'
+                ) {
+                  card.removeAttribute(PRESENTATION_HANDLED_ATTR);
                 }
-              });
-            });
-
-            observer.observe(document.body || document.documentElement, {
+              }
+            };
+            var observer = new MutationObserver(resetCompletedPresentation);
+            observer.observe(document, {
               childList: true,
-              subtree: true
+              subtree: true,
+              attributes: true,
+              attributeFilter: ['class', 'hidden', 'aria-hidden']
             });
           }
         })();

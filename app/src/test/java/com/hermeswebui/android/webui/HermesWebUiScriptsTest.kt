@@ -44,6 +44,8 @@ class HermesWebUiScriptsTest {
         assertThat(script).contains("root.style.setProperty('--dvh',")
         assertThat(script).contains("root.style.setProperty('--viewport-height',")
         assertThat(script).contains("root.style.setProperty('--viewport-width',")
+        assertThat(script).contains("root.style.setProperty('--hermes-android-visual-viewport-height',")
+        assertThat(script).contains("visualBottom: visualTop + visualHeight")
     }
 
     @Test
@@ -90,16 +92,22 @@ class HermesWebUiScriptsTest {
 
         // Expanded clarify surface selector (#80) alongside the approval surface (#44)
         assertThat(script).contains(".approval-card.visible:not(.collapsed), .clarify-card.visible:not(.collapsed)")
-        // Measured geometry: panel bottom (composer anchor) minus titlebar bottom
+        // Measured geometry: visible panel bottom minus the greater of the
+        // titlebar and visual-viewport top boundaries.
         assertThat(script).contains("document.querySelector('.app-titlebar')")
-        assertThat(script).contains("promptCard.getBoundingClientRect().bottom - titlebarBottom - 8")
+        assertThat(script).contains("promptCard.getBoundingClientRect().bottom + previousShift")
+        assertThat(script).contains("viewport.visualBottom")
+        assertThat(script).contains("anchorBottom - viewport.visualBottom")
+        assertThat(script).contains("translateY(calc(-1 * var(")
         // The cap overrides the WebUI viewport-unit clamp on both the card and its
         // scrolling inner region, with internal scroll for oversized content
-        assertThat(script).contains(".clarify-card:not(.collapsed) { max-height: ' + promptPanelMaxPx + ' !important; }")
+        assertThat(script).contains(".clarify-card:not(.collapsed) { max-height: ' + promptPanelMaxPx + ' !important; transform:")
         assertThat(script).contains(".clarify-card:not(.collapsed) .clarify-inner")
         assertThat(script).contains("overflow-y: auto !important; }")
-        // Usable floor matching the WebUI clamp minimum
-        assertThat(script).contains("Math.max(180, promptPanelMax)")
+        // A preferred WebUI floor must not exceed the actually visible space
+        assertThat(script).contains("Math.max(titlebarBottom, viewport.visualTop)")
+        assertThat(script).contains("Math.max(1, promptPanelMax)")
+        assertThat(script).doesNotContain("Math.max(180, promptPanelMax)")
     }
 
     @Test
@@ -126,6 +134,16 @@ class HermesWebUiScriptsTest {
         // Keep the composer-wrap out of the generic collapse repair so a transient
         // repair cannot turn it into a scroll container in the first place.
         assertThat(script).contains("el.classList.contains('composer-wrap')")
+    }
+
+    @Test
+    fun `generic viewport repair preserves original overflow contract`() {
+        val script = HermesWebUiScripts.viewportFixScript
+
+        assertThat(script).contains("Preserve the element's existing overflow contract")
+        assertThat(script).doesNotContain("data-hermes-android-vh-scrollable")
+        assertThat(script).doesNotContain("el.style.overflowY = 'auto'")
+        assertThat(script).doesNotContain("el.style.removeProperty('overflow-y')")
     }
 
     @Test
@@ -157,12 +175,20 @@ class HermesWebUiScriptsTest {
     }
 
     @Test
-    fun `dialog keyboard script preserves explicit input focus`() {
-        val script = HermesWebUiScripts.suppressKeyboardForDialogsScript
+    fun `clarify autofocus script does not inspect unrelated dialogs`() {
+        val script = HermesWebUiScripts.suppressClarifyAutofocusScript
 
-        assertThat(script).contains("document.addEventListener('pointerdown', rememberExplicitInputFocus, true)")
-        assertThat(script).contains("document.addEventListener('touchstart', rememberExplicitInputFocus, true)")
-        assertThat(script).contains("if (target === explicitlyFocusedInput)")
-        assertThat(script).contains("Suppress programmatic dialog autofocus")
+        assertThat(script).contains("target.id === 'clarifyInput'")
+        assertThat(script).contains("target.closest('.clarify-card')")
+        assertThat(script).contains("target.closest('.clarify-choice.other')")
+        assertThat(script).contains("event.key === 'Tab'")
+        assertThat(script).contains("data-hermes-android-clarify-focus-handled")
+        assertThat(script).contains("getClarifyPresentationKey")
+        assertThat(script).contains("typeof _clarifyId !== 'undefined'")
+        assertThat(script).contains("focusIntentPresentationKey === presentationKey")
+        assertThat(script).contains("card.getAttribute(PRESENTATION_HANDLED_ATTR) === presentationKey")
+        assertThat(script).contains("document.addEventListener('focusin', suppressAutomaticClarifyFocus, true)")
+        assertThat(script).doesNotContain("role === 'dialog'")
+        assertThat(script).doesNotContain("querySelectorAll('input")
     }
 }
