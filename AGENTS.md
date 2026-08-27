@@ -94,6 +94,7 @@ When a user references GitHub issues (e.g., by URL or issue number), agents shou
 - For issue work, create or reuse a branch named after the issue (for example `issue-73`) before publishing any code.
 - Push the branch to GitHub with `git push --set-upstream origin <branch>` once the work is ready for review.
 - Create the PR with `gh pr create --title "<user-facing release note>" --body-file <path-to-markdown> --base main --head <branch>`; do not hand-write a long inline body in `--body`.
+- When working on an issue, assign the issue and its associated pull request to `Paladin173` using `gh issue edit <issue-number> --add-assignee Paladin173` and `gh pr edit <pr-number> --add-assignee Paladin173`.
 - Attach the PR to the issue in the PR body by including a closing keyword such as `Fixes #123` or `Closes #123`; use `Related #123` when the PR contributes without fully resolving the issue.
 - When an issue is resolved and closed, always add a comment to the issue explaining the fix: a short root-cause summary, what changed, and how it was verified. Post it with a file-based markdown body, such as `gh issue comment <issue-number> --body-file <path-to-markdown>` or `gh api repos/<owner>/<repo>/issues/<issue-number>/comments --input <path-to-markdown>`.
 - Always verify the rendered result with `gh pr view` or `gh issue view` after posting, and fix any markdown formatting regression immediately.
@@ -109,11 +110,21 @@ When a user references GitHub issues (e.g., by URL or issue number), agents shou
 - When a PR completes an issue, use GitHub closing keywords such as
   `Fixes #123` or `Closes #123`. Use `Related #123` when it only contributes to
   the issue.
-- Apply labels that help generated release notes group the change:
-  `feature`, `enhancement`, `user-facing`, `bug`, `bugfix`, `fix`,
-  `testing-notes`, `needs-testing`, `maintenance`, `release`, or `docs`.
-- Use `skip-changelog` only for changes that should not appear in user-facing
+- Apply labels that help generated release notes group the change. The
+  repository label set is deliberately small, and these are the only labels
+  `.github/release.yml` reacts to:
+  - `enhancement` or `user-facing` - grouped under "Features and Improvements"
+  - `bug` - grouped under "Fixes"
+  - `documentation` - grouped under "Documentation"
+  - `skip-changelog` - omitted from user-facing release notes entirely
+- Anything unlabeled falls under "Other Changes", which is a fine default for
+  internal refactors and CI work.
+- `needs-triage` and `help wanted` are issue-triage labels and do not affect
   release notes.
+- Do not invent labels in a PR body or in these instructions. GitHub silently
+  ignores a label that does not exist, so a category keyed to a made-up label
+  never renders. Create the label first with `gh label create` if a new grouping
+  is genuinely needed, then add it to both `.github/release.yml` and this list.
 - Do not make release notes primarily about commit hashes, workflow run IDs,
   artifact names, or SHA-256 values. Keep those in workflow logs or summaries.
 
