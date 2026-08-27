@@ -96,8 +96,8 @@ When a user references GitHub issues (e.g., by URL or issue number), agents shou
 - Create the PR with `gh pr create --title "<user-facing release note>" --body-file <path-to-markdown> --base main --head <branch>`; do not hand-write a long inline body in `--body`.
 - When working on an issue, assign the issue and its associated pull request to `Paladin173` using `gh issue edit <issue-number> --add-assignee Paladin173` and `gh pr edit <pr-number> --add-assignee Paladin173`.
 - Attach the PR to the issue in the PR body by including a closing keyword such as `Fixes #123` or `Closes #123`; use `Related #123` when the PR contributes without fully resolving the issue.
-- When an issue is resolved and closed, always add a comment to the issue explaining the fix: a short root-cause summary, what changed, and how it was verified. Post it with a file-based markdown body, such as `gh issue comment <issue-number> --body-file <path-to-markdown>` or `gh api repos/<owner>/<repo>/issues/<issue-number>/comments --input <path-to-markdown>`.
-- Always verify the rendered result with `gh pr view` or `gh issue view` after posting, and fix any markdown formatting regression immediately.
+- Before closing any issue, always add a comment documenting the outcome, even when the issue is closed by a merged PR, manually, or through an automatic closing keyword. A concise copy of the associated PR's `What changed` and `Testing` sections is acceptable; otherwise include the root cause, what changed, and how it was verified. Post it before closing with a file-based markdown body, such as `gh issue comment <issue-number> --body-file <path-to-markdown>` or `gh api repos/<owner>/<repo>/issues/<number>/comments --input <path-to-markdown>`.
+- After posting the comment and closing the issue, verify both the rendered comment and final issue state with normal `gh issue view` output, and fix any markdown formatting regression immediately. If a closing PR automatically closes the issue before the comment can be posted, add the comment immediately afterward and still verify both.
 
 ### PR and release-note quality
 
