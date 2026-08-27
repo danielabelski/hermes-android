@@ -66,6 +66,7 @@ def check_rendering_breaks(path: Path, lines: list[tuple[int, str]]) -> list[Fin
 
 def check_repo_links(root: Path, path: Path, lines: list[tuple[int, str]]) -> list[Finding]:
     findings = []
+    root = root.resolve()
     for number, line in lines:
         without_code = re.sub(r"`[^`]*`", "", line)
         for match in INLINE_LINK_RE.finditer(without_code):
@@ -79,6 +80,13 @@ def check_repo_links(root: Path, path: Path, lines: list[tuple[int, str]]) -> li
                 continue
             base = root if target_path.startswith("/") else path.parent
             target = (base / target_path.lstrip("/")).resolve()
+            try:
+                target.relative_to(root)
+            except ValueError:
+                findings.append(
+                    Finding(path, number, f"link target outside repository: {dest}")
+                )
+                continue
             if not target.exists():
                 findings.append(Finding(path, number, f"link target not found: {dest}"))
     return findings

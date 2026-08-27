@@ -44,6 +44,48 @@ class MarkdownCheckTests(unittest.TestCase):
     def test_existing_relative_target_passes(self) -> None:
         self.assertEqual(self._check("See [the guide](guide.md).", ("guide.md",)), [])
 
+    def test_existing_target_outside_repository_is_reported(self) -> None:
+        with TemporaryDirectory() as tmp, TemporaryDirectory() as outside_tmp:
+            root = Path(tmp)
+            outside = Path(outside_tmp) / "guide.md"
+            outside.write_text("", encoding="utf-8")
+            doc = root / "docs" / "doc.md"
+            doc.parent.mkdir()
+            doc.write_text("See [the guide](../../" + outside.name + ").", encoding="utf-8")
+            findings = check_file(root, doc)
+            self.assertEqual(
+                [finding.message for finding in findings],
+                ["link target outside repository: ../../" + outside.name],
+            )
+
+    def test_symlink_target_outside_repository_is_reported(self) -> None:
+        with TemporaryDirectory() as tmp, TemporaryDirectory() as outside_tmp:
+            root = Path(tmp)
+            outside = Path(outside_tmp) / "guide.md"
+            outside.write_text("", encoding="utf-8")
+            link = root / "guide.md"
+            try:
+                link.symlink_to(outside)
+            except (NotImplementedError, OSError) as error:
+                self.skipTest(f"symlinks unavailable: {error}")
+            doc = root / "doc.md"
+            doc.write_text("See [the guide](guide.md).", encoding="utf-8")
+            findings = check_file(root, doc)
+            self.assertEqual(
+                [finding.message for finding in findings],
+                ["link target outside repository: guide.md"],
+            )
+
+    def test_parent_target_inside_repository_passes(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            guide = root / "guide.md"
+            guide.write_text("", encoding="utf-8")
+            doc = root / "docs" / "doc.md"
+            doc.parent.mkdir()
+            doc.write_text("See [the guide](../guide.md).", encoding="utf-8")
+            self.assertEqual(check_file(root, doc), [])
+
     def test_anchor_on_a_real_file_passes(self) -> None:
         self.assertEqual(
             self._check("See [setup](guide.md#setup).", ("guide.md",)),
