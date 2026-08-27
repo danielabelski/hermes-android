@@ -57,46 +57,12 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
         run: |
-          # Fail-safe by construction: this step always exits 0 and always emits
-          # docs_only, defaulting to 'false' (= run the full suite). Any
-          # uncertainty - no base to diff, an unreadable diff, a single non-doc
-          # path - runs everything. It can over-run CI; it can never skip a
-          # Gradle gate on a change that touches real code.
-          docs_only="false"
-          emit() { echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"; }
-          trap emit EXIT
-          set -uo pipefail
-
-          # Strict allowlist. A path is docs only if it carries a Markdown
-          # extension. Deliberately NOT docs: *.txt (requirements.txt controls
-          # dependencies), and any code file merely named README/CHANGELOG.
-          if [ -n "${BASE_SHA:-}" ] && [ -n "${HEAD_SHA:-}" ]; then
-            RANGE="$BASE_SHA...$HEAD_SHA"
-          else
-            RANGE="${{ github.event.before }}...${{ github.sha }}"
-          fi
-
-          # --no-renames so `git mv MainActivity.kt notes.md` still reveals the
-          # source-file deletion instead of collapsing to a docs destination.
-          if ! FILES="$(git diff --name-only --no-renames "$RANGE" 2>/dev/null)"; then
-            echo "Could not diff $RANGE - running the full suite."; exit 0
-          fi
-          if [ -z "$FILES" ]; then
-            echo "Empty diff - running the full suite."; exit 0
-          fi
-
-          echo "Changed files:"; echo "$FILES"
-          result="true"
-          while IFS= read -r file; do
-            [ -z "$file" ] && continue
-            case "$(printf '%s' "$file" | tr '[:upper:]' '[:lower:]')" in
-              *.md) ;;
-              *) echo "Non-docs path -> full suite required: $file"; result="false"; break ;;
-            esac
-          done <<< "$FILES"
-          docs_only="$result"
+          docs_only="$(python3 tools/detect_docs_only.py)"
           echo "docs_only=$docs_only"
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
 
   # Not a Markdown style linter. `docs-render` blocks only on breaks that render
   # as literal garbage or point at a file that does not exist; `docs-links`

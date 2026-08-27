@@ -249,6 +249,17 @@ Device check:
 .\gradlew.bat connectedDebugAndroidTest --no-daemon
 ```
 
+Repository tooling checks can be run with:
+
+```powershell
+python -m unittest discover -s tools/tests -p 'test_*.py' -v
+python tools/check_markdown.py
+```
+
+The docs-only CI short-circuit is fail-safe: only a non-empty diff containing
+Markdown files exclusively can skip the Android Gradle gates. Unreadable,
+empty, invalid, renamed, or mixed diffs run the full suite.
+
 Release automation is centered on:
 
 - `.github/workflows/1-orchestration-release.yml`

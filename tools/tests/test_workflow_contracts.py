@@ -111,8 +111,8 @@ class WorkflowContractTests(unittest.TestCase):
         # change is exactly when they matter most.
         self.assertNotIn("docs_only", blocks["release-tooling-tests"])
         # The detector must default to running everything.
-        self.assertIn('docs_only="false"', blocks["changes"])
-        self.assertIn("trap emit EXIT", blocks["changes"])
+        self.assertIn("python3 tools/detect_docs_only.py", blocks["changes"])
+        self.assertTrue((ROOT / "tools" / "detect_docs_only.py").exists())
 
     def test_required_check_candidates_always_report_a_conclusion(self) -> None:
         """Jobs intended as required status checks must never be skipped.
