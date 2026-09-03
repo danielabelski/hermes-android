@@ -161,6 +161,8 @@ jobs:
           script: ./gradlew --no-daemon connectedDebugAndroidTest
 
       - name: Build signed release artifacts
+        env:
+          GITHUB_RELEASES_REPO: ${{ github.repository }}
         shell: bash
         run: |
           ./gradlew test lintDebug :app:stageGithubReleaseApk :app:bundleRelease --no-daemon
