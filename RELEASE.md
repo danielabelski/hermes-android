@@ -74,6 +74,56 @@ manually with the same Play AAB artifact metadata.
 Do not rerun `1 - Orchestration Release` just to retry one failed publish
 target unless the build artifacts are missing or expired.
 
+## Device Acceptance: GitHub APK (Phone + Tablet)
+
+Run this checklist on one phone and one tablet after every GitHub APK release.
+It documents exact commands and artifacts; it never installs anything by
+itself — Android updates always hand off to the system installer, so no silent
+install is promised or expected.
+
+### Human Approval Gate (stop point)
+
+Before pushing, tagging, creating a release, or touching any secret:
+
+1. Stop and get explicit human approval naming the exact version, tag, and
+   publish target(s).
+2. Never read, print, paste, or request secret values. Names only:
+   `ANDROID_KEYSTORE_BASE`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
+   `ANDROID_KEY_PASSWORD`, `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE`.
+
+### Release Artifacts to Collect (before device testing)
+
+- APK artifact name: `hermes-webui-v<version>-github.apk`
+- Version name (must end in `-github`) and version code from the workflow summary
+- APK file SHA-256 and signing-cert SHA-256 digests printed by the release
+  verifier (`tools/verify_release_apk.py`); only digests are ever printed
+
+```powershell
+python tools/verify_release_apk.py --apk <staged-apk> `
+  --expected-package com.hermeswebui.android.github `
+  --expected-version-name <version>-github `
+  --expected-version-code <code>
+./gradlew.bat -q :app:printReleaseVersionName --no-daemon
+```
+
+### Per-Device Checklist (repeat on phone and tablet)
+
+1. Package check: installed app id is `com.hermeswebui.android.github`
+   (`adb shell pm list packages | findstr hermes`).
+2. Version check: Settings shows the released version name;
+   `adb shell dumpsys package com.hermeswebui.android.github | findstr versionName`.
+3. Cert/SHA-256 check: downloaded APK file hash and signing-cert digest match
+   the release verifier output from the step above.
+4. Download/install prompt: in-app update flow shows `Check` -> `Download` ->
+   `Install`; tapping Install opens the Android system installer prompt (not a
+   silent install); an install-ready notification appears when Hermes is
+   backgrounded mid-download.
+5. No-update behavior: with the latest version already installed, `Check`
+   reports no update available and shows no download/install action.
+6. Rollback/manual fallback: if the new build misbehaves, uninstall it and
+   reinstall the previous release APK from the GitHub Releases page by hand;
+   confirm Settings shows the previous version name afterward.
+
 ## Safety Checks
 
 - Release workflows use concurrency groups to avoid duplicate publishing for
