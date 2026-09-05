@@ -14,6 +14,17 @@ val appVersionCode = run {
 val distributionArtifactName = "hermes-webui-v$appVersionName"
 val githubReleaseArtifactName = "$distributionArtifactName-github"
 
+// Repository (owner/name) whose GitHub Releases the "github" build type checks.
+// Defaults to upstream so local/upstream builds are unchanged; release workflows
+// override it with the repository running the workflow so fork builds check fork releases.
+val defaultGithubReleaseRepo = "hermes-webui/hermes-android"
+val githubReleaseRepo: String = run {
+    val candidate = providers.gradleProperty("githubReleaseRepo").orNull
+        ?: providers.environmentVariable("GITHUB_RELEASES_REPO").orNull
+    candidate?.trim()?.takeIf { it.isNotEmpty() && it.contains('/') }
+        ?: defaultGithubReleaseRepo
+}
+
 val keystoreProperties = Properties().apply {
     val propertiesFile = rootProject.file("keystore.properties")
     if (propertiesFile.exists()) {
@@ -137,12 +148,12 @@ extensions.configure<ApplicationExtension>("android") {
             buildConfigField(
                 "String",
                 "GITHUB_RELEASES_API_URL",
-                "\"https://api.github.com/repos/hermes-webui/hermes-android/releases/latest\""
+                "\"https://api.github.com/repos/$githubReleaseRepo/releases/latest\""
             )
             buildConfigField(
                 "String",
                 "GITHUB_RELEASES_PAGE_URL",
-                "\"https://github.com/hermes-webui/hermes-android/releases/latest\""
+                "\"https://github.com/$githubReleaseRepo/releases/latest\""
             )
         }
         debug {

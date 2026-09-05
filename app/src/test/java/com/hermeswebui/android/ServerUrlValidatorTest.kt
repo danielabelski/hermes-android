@@ -26,4 +26,21 @@ class ServerUrlValidatorTest {
     fun `rejects unsupported scheme`() {
         assertThat(validator.isValid("ftp://hermes.example.com")).isFalse()
     }
+
+    @Test
+    fun `accepts host with port and path`() {
+        assertThat(validator.isValid("https://hermes.example.com:8443/dashboard?tab=chat")).isTrue()
+        assertThat(validator.isValid("http://192.168.1.50:8080/")).isTrue()
+    }
+
+    @Test
+    fun `rejects blank input`() {
+        assertThat(validator.isValid("")).isFalse()
+        assertThat(validator.isValid("   ")).isFalse()
+    }
+
+    @Test
+    fun `rejects scheme without host`() {
+        assertThat(validator.isValid("https://")).isFalse()
+    }
 }

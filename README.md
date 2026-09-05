@@ -280,7 +280,10 @@ Git and never commits or pushes source changes. `versionCode` is derived from
 semantic version as `major*10000 + minor*100 + patch`; update the Gradle and
 README metadata together before starting a release.
 
-See [RELEASE.md](./RELEASE.md) for the operator workflow.
+See [RELEASE.md](./RELEASE.md) for the operator workflow, including the phone
+and tablet GitHub APK acceptance checklist and the human approval gate before
+any push, tag, release, or secret change. Android updates always hand off to
+the system installer; no silent install is promised.
 
 ## Architecture
 

@@ -25,4 +25,23 @@ class TailscaleEndpointDetectorTest {
         assertThat(TailscaleEndpointDetector.isTailscaleUrl("https://hermes.example.com")).isFalse()
         assertThat(TailscaleEndpointDetector.isTailscaleUrl("https://192.168.1.12")).isFalse()
     }
+
+    @Test
+    fun `rejects cgnat addresses just outside the tailscale range`() {
+        assertThat(TailscaleEndpointDetector.isTailscaleUrl("http://100.63.0.1")).isFalse()
+        assertThat(TailscaleEndpointDetector.isTailscaleUrl("http://100.128.0.1")).isFalse()
+        assertThat(TailscaleEndpointDetector.isTailscaleUrl("http://101.64.0.1")).isFalse()
+    }
+
+    @Test
+    fun `detects cgnat range boundaries`() {
+        assertThat(TailscaleEndpointDetector.isTailscaleUrl("http://100.64.0.1")).isTrue()
+        assertThat(TailscaleEndpointDetector.isTailscaleUrl("http://100.127.255.255")).isTrue()
+    }
+
+    @Test
+    fun `rejects invalid ipv4 octets and malformed hosts`() {
+        assertThat(TailscaleEndpointDetector.isTailscaleUrl("http://100.999.1.1")).isFalse()
+        assertThat(TailscaleEndpointDetector.isTailscaleUrl("https://not-a-url")).isFalse()
+    }
 }
