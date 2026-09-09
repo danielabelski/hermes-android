@@ -4,6 +4,42 @@ import org.json.JSONObject
 
 object HermesWebUiScripts {
     /**
+     * Keeps pinch-to-zoom available even when Hermes WebUI's viewport metadata disables
+     * browser scaling. The observer covers the document-start case where the meta element
+     * is parsed after this script runs.
+     */
+    val pinchZoomScript = """
+        (function() {
+          'use strict';
+
+          var enablePinchZoom = function() {
+            var viewport = document.querySelector('meta[name="viewport"]');
+            if (!viewport) return false;
+
+            var directives = viewport.content
+              .split(',')
+              .map(function(value) { return value.trim(); })
+              .filter(function(value) {
+                return value &&
+                  !/^user-scalable\s*=/i.test(value) &&
+                  !/^maximum-scale\s*=/i.test(value);
+              });
+            directives.push('maximum-scale=5');
+            directives.push('user-scalable=yes');
+            viewport.content = directives.join(', ');
+            return true;
+          };
+
+          if (enablePinchZoom()) return;
+
+          var observer = new MutationObserver(function() {
+            if (enablePinchZoom()) observer.disconnect();
+          });
+          observer.observe(document, { childList: true, subtree: true });
+        })();
+    """.trimIndent()
+
+    /**
      * Hybrid Viewport Polyfill for Android WebView
      *
      * Android System WebView has a bug where CSS viewport units (vh, dvh, svh, lvh) can

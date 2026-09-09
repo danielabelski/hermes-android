@@ -5,6 +5,18 @@ import org.junit.Test
 
 class HermesWebUiScriptsTest {
     @Test
+    fun `pinch zoom script overrides restrictive viewport directives`() {
+        val script = HermesWebUiScripts.pinchZoomScript
+
+        assertThat(script).contains("meta[name=\"viewport\"]")
+        assertThat(script).contains("/^user-scalable\\s*=/i")
+        assertThat(script).contains("/^maximum-scale\\s*=/i")
+        assertThat(script).contains("directives.push('maximum-scale=5')")
+        assertThat(script).contains("directives.push('user-scalable=yes')")
+        assertThat(script).contains("new MutationObserver")
+    }
+
+    @Test
     fun `app settings script preserves folded navigation selectors`() {
         val script = HermesWebUiScripts.appSettingsEntryScript
 

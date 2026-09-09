@@ -194,6 +194,7 @@ class MainActivity : ComponentActivity() {
     private var pendingLocalNetworkPermissionAction: (() -> Unit)? = null
     private var pendingLocalNetworkPermissionDeniedAction: (() -> Unit)? = null
     private var viewportFixScriptHandler: ScriptHandler? = null
+    private var pinchZoomScriptHandler: ScriptHandler? = null
     private var microphoneFallbackScriptHandler: ScriptHandler? = null
     private var notificationBridgeScriptHandler: ScriptHandler? = null
     private var routeRecoveryScriptHandler: ScriptHandler? = null
@@ -1627,6 +1628,7 @@ class MainActivity : ComponentActivity() {
 
     private fun applyHermesWebUiRuntimeScripts(view: WebView) {
         view.evaluateJavascript(HermesWebUiScripts.viewportFixScript, null)
+        view.evaluateJavascript(HermesWebUiScripts.pinchZoomScript, null)
         view.evaluateJavascript(HermesWebUiScripts.microphoneFallbackScript, null)
         view.evaluateJavascript(HermesWebUiScripts.suppressClarifyAutofocusScript, null)
         view.evaluateJavascript(buildHermesWebUiNotificationBridgeScript(), null)
@@ -1668,6 +1670,11 @@ class MainActivity : ComponentActivity() {
             originRule,
             HermesWebUiScripts.viewportFixScript
         )
+        pinchZoomScriptHandler = addDocumentStartScript(
+            view,
+            originRule,
+            HermesWebUiScripts.pinchZoomScript
+        )
         microphoneFallbackScriptHandler = addDocumentStartScript(
             view,
             originRule,
@@ -1705,6 +1712,7 @@ class MainActivity : ComponentActivity() {
     private fun removeHermesWebUiDocumentStartFixes() {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) return
         viewportFixScriptHandler?.remove()
+        pinchZoomScriptHandler?.remove()
         microphoneFallbackScriptHandler?.remove()
         notificationBridgeScriptHandler?.remove()
         routeRecoveryScriptHandler?.remove()
@@ -1712,6 +1720,7 @@ class MainActivity : ComponentActivity() {
         enterKeyNewlineScriptHandler?.remove()
         suppressClarifyAutofocusScriptHandler?.remove()
         viewportFixScriptHandler = null
+        pinchZoomScriptHandler = null
         microphoneFallbackScriptHandler = null
         notificationBridgeScriptHandler = null
         routeRecoveryScriptHandler = null
