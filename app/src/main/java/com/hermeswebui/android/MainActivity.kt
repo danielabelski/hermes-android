@@ -1627,16 +1627,24 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun applyHermesWebUiRuntimeScripts(view: WebView) {
-        view.evaluateJavascript(HermesWebUiScripts.viewportFixScript, null)
-        view.evaluateJavascript(HermesWebUiScripts.pinchZoomScript, null)
-        view.evaluateJavascript(HermesWebUiScripts.microphoneFallbackScript, null)
-        view.evaluateJavascript(HermesWebUiScripts.suppressClarifyAutofocusScript, null)
-        view.evaluateJavascript(buildHermesWebUiNotificationBridgeScript(), null)
-        view.evaluateJavascript(buildHermesWebUiRouteRecoveryScript(), null)
-        if (EnableAppSettingsSidebarShim) {
-            view.evaluateJavascript(HermesWebUiScripts.appSettingsEntryScript, null)
+        val settings = viewModel.uiState.value.settings
+        val trustedOrigin = UrlOrigins.documentStartOriginRule(settings.serverUrl) ?: return
+        val scripts = buildList {
+            add(HermesWebUiScripts.viewportFixScript)
+            add(HermesWebUiScripts.pinchZoomScript)
+            add(HermesWebUiScripts.microphoneFallbackScript)
+            add(HermesWebUiScripts.suppressClarifyAutofocusScript)
+            add(buildHermesWebUiNotificationBridgeScript())
+            add(buildHermesWebUiRouteRecoveryScript())
+            if (EnableAppSettingsSidebarShim) add(HermesWebUiScripts.appSettingsEntryScript)
+            add("window.__hermesAndroidHardwareKeyboard = ${isHardwareKeyboardAttached()};")
         }
-        syncHardwareKeyboardState(view)
+        scripts.forEach { script ->
+            view.evaluateJavascript(
+                HermesWebUiScripts.buildOriginGuardedRuntimeScript(trustedOrigin, script),
+                null
+            )
+        }
     }
 
     private fun isHardwareKeyboardAttached(): Boolean {

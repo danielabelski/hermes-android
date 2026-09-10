@@ -4,6 +4,22 @@ import org.json.JSONObject
 
 object HermesWebUiScripts {
     /**
+     * Wraps a runtime fallback script with an execution-time origin check. WebView evaluates
+     * JavaScript asynchronously, so the page may have navigated after the native route check.
+     */
+    fun buildOriginGuardedRuntimeScript(trustedOrigin: String, script: String): String {
+        val quotedOrigin = JSONObject.quote(trustedOrigin)
+        return """
+            (function() {
+              'use strict';
+              var trustedOrigin = new URL($quotedOrigin).origin;
+              if (window.location.origin !== trustedOrigin) return;
+              $script
+            })();
+        """.trimIndent()
+    }
+
+    /**
      * Keeps pinch-to-zoom available even when Hermes WebUI's viewport metadata disables
      * browser scaling. The observer covers the document-start case where the meta element
      * is parsed after this script runs.

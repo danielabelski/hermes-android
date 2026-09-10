@@ -5,6 +5,20 @@ import org.junit.Test
 
 class HermesWebUiScriptsTest {
     @Test
+    fun `runtime script builder checks current origin before executing payload`() {
+        val script = HermesWebUiScripts.buildOriginGuardedRuntimeScript(
+            trustedOrigin = "https://hermes.example.com:8443",
+            script = "window.__runtimePayloadExecuted = true;"
+        )
+
+        assertThat(script).contains(
+            "var trustedOrigin = new URL(\"https://hermes.example.com:8443\").origin;"
+        )
+        assertThat(script).contains("if (window.location.origin !== trustedOrigin) return;")
+        assertThat(script).contains("window.__runtimePayloadExecuted = true;")
+    }
+
+    @Test
     fun `pinch zoom script overrides restrictive viewport directives`() {
         val script = HermesWebUiScripts.pinchZoomScript
 
