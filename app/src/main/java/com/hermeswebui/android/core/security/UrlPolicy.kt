@@ -150,19 +150,31 @@ object UrlOrigins {
         } else {
             val raw = rawAuthorityHostPort(url) ?: return null
             host = raw.first
-            raw.second?.let { port = it.toIntOrNull() ?: return null }
+            raw.second?.let { port = parsePort(it) ?: return null }
         }
+        // A browser rejects an out-of-range port; java.net.URI does NOT, so validate here too.
+        // Fail closed rather than synthesize a valid literal from an invalid URL.
+        if (port != -1 && port !in 0..65535) return null
         val canonicalHost = canonicalBrowserHost(host) ?: return null
         val defaultPort = if (scheme == "https") 443 else 80
         val portPart = if (port != -1 && port != defaultPort) ":$port" else ""
         return "$scheme://$canonicalHost$portPart"
     }
 
+    /** Parse a port the way a browser does: ASCII digits only, in 0..65535. Anything else is null. */
+    private fun parsePort(text: String): Int? {
+        if (text.isEmpty() || text.any { it !in '0'..'9' }) return null
+        return text.toIntOrNull()?.takeIf { it in 0..65535 }
+    }
+
     /**
      * Read (host, port?) from the raw authority, lowercased, for URLs `java.net.URI` parses but
-     * whose host it rejects. Userinfo (credentials) is stripped, matching a browser's
-     * `location.origin`. An authority we cannot read cleanly returns null so the caller fails
-     * closed.
+     * whose host it rejects. This fallback exists ONLY to recover the numeric/ASCII hosts a
+     * browser accepts but java.net.URI does not (trailing-dot IPv4, `0x.0x.0x.0x`); it does NOT
+     * implement WHATWG percent-decoding or IDNA. So it fails closed (returns null) on any host
+     * carrying a `%` escape or a non-ASCII character, rather than emit a literal that would never
+     * match the browser's decoded/punycode origin. Userinfo (credentials) is stripped to match a
+     * browser's `location.origin`.
      */
     private fun rawAuthorityHostPort(url: String): Pair<String, String?>? {
         val afterScheme = url.substringAfter("://", "").ifEmpty { return null }
@@ -190,6 +202,8 @@ object UrlOrigins {
         }
         val lowered = host.lowercase(Locale.US)
         if (lowered.isEmpty()) return null
+        // We do not decode/IDNA in this fallback, so refuse anything that would need it.
+        if (lowered.any { it.code > 0x7F } || lowered.contains('%')) return null
         return lowered to port
     }
 

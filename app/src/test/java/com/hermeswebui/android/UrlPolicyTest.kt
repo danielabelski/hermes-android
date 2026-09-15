@@ -226,6 +226,30 @@ class UrlPolicyTest {
     }
 
     @Test
+    fun `page origin fails closed on an invalid or out-of-range port`() {
+        // java.net.URI does not range-check the port; a browser rejects these outright, so the
+        // guard must too rather than synthesize a valid literal from an invalid URL.
+        assertThat(UrlOrigins.pageOrigin("http://127.0.0.1.:65536")).isNull()
+        assertThat(UrlOrigins.pageOrigin("http://127.0.0.1.:-1")).isNull()
+        assertThat(UrlOrigins.pageOrigin("http://127.0.0.1.:+80")).isNull()
+        assertThat(UrlOrigins.pageOrigin("http://127.0.0.1.:8_7")).isNull()
+        // The high boundary is valid.
+        assertThat(UrlOrigins.pageOrigin("http://127.0.0.1.:65535"))
+            .isEqualTo("http://127.0.0.1:65535")
+    }
+
+    @Test
+    fun `page origin fails closed on hosts needing percent-decoding or IDNA`() {
+        // The raw-authority fallback recovers only ASCII/numeric hosts; it does NOT implement
+        // WHATWG percent-decoding or punycode, so it fails closed rather than emit a literal that
+        // would never match a browser's decoded/punycode origin. (A real self-hosted server URL is
+        // an IP or an ASCII hostname, both of which java.net.URI already accepts.)
+        assertThat(UrlOrigins.pageOrigin("http://foo%2ebar")).isNull()
+        assertThat(UrlOrigins.pageOrigin("http://%31%32%37.0.0.1")).isNull()
+        assertThat(UrlOrigins.pageOrigin("http://münchen.de:8080")).isNull()
+    }
+
+    @Test
     fun `page origin fails closed on an out-of-range numeric host`() {
         // These are numeric candidates the browser rejects outright. Returning the raw spelling
         // would emit a literal that can never match; null makes the caller skip injection.
