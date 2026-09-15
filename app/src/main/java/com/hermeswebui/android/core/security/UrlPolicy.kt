@@ -110,6 +110,29 @@ object UrlOrigins {
         return "$scheme://$hostRule$portRule"
     }
 
+    /**
+     * The origin exactly as a page reports it in `window.location.origin`: scheme + host, with
+     * the port omitted when it is the scheme's default (80/http, 443/https).
+     *
+     * This is deliberately NOT [documentStartOriginRule] — that builds a WebViewCompat allow-rule,
+     * which keeps an explicitly-specified default port (`http://host:80`) that the browser drops.
+     * Comparing against the rule would silently fail the guard for such a server URL. Canonicalizing
+     * here, natively, is what lets the injected guard compare a literal string instead of calling
+     * the page-controlled `URL` constructor.
+     */
+    fun pageOrigin(url: String): String? {
+        val uri = url.toUriOrNull() ?: return null
+        val scheme = uri.scheme
+            ?.lowercase(Locale.US)
+            ?.takeIf { it == "http" || it == "https" }
+            ?: return null
+        val host = uri.normalizedHost()?.takeIf { it.isNotBlank() } ?: return null
+        val hostPart = if (host.contains(":") && !host.startsWith("[")) "[$host]" else host
+        val defaultPort = if (scheme == "https") 443 else 80
+        val portPart = if (uri.port != -1 && uri.port != defaultPort) ":${uri.port}" else ""
+        return "$scheme://$hostPart$portPart"
+    }
+
     fun normalizeOriginUrl(url: String): String {
         val trimmed = url.trim()
         val parsed = trimmed.toUriOrNull() ?: return trimmed

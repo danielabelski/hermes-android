@@ -12,10 +12,23 @@ class HermesWebUiScriptsTest {
         )
 
         assertThat(script).contains(
-            "var trustedOrigin = new URL(\"https://hermes.example.com:8443\").origin;"
+            "if (window.location.origin !== \"https://hermes.example.com:8443\") return;"
         )
-        assertThat(script).contains("if (window.location.origin !== trustedOrigin) return;")
         assertThat(script).contains("window.__runtimePayloadExecuted = true;")
+    }
+
+    @Test
+    fun `runtime guard compares a literal and never calls the page-controlled URL constructor`() {
+        // A hostile page can replace window.URL before this asynchronously-evaluated script runs.
+        // If the guard resolved the trusted origin via `new URL(...)`, the replacement would return
+        // the hostile page's own origin and the payload would execute off-origin.
+        val script = HermesWebUiScripts.buildOriginGuardedRuntimeScript(
+            trustedOrigin = "https://hermes.example.com:8443",
+            script = "window.__runtimePayloadExecuted = true;"
+        )
+
+        assertThat(script).doesNotContain("new URL(")
+        assertThat(script).doesNotContain("trustedOrigin")
     }
 
     @Test

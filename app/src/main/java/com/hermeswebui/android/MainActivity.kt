@@ -1628,7 +1628,7 @@ class MainActivity : ComponentActivity() {
 
     private fun applyHermesWebUiRuntimeScripts(view: WebView) {
         val settings = viewModel.uiState.value.settings
-        val trustedOrigin = UrlOrigins.documentStartOriginRule(settings.serverUrl) ?: return
+        val trustedOrigin = UrlOrigins.pageOrigin(settings.serverUrl) ?: return
         val scripts = buildList {
             add(HermesWebUiScripts.viewportFixScript)
             add(HermesWebUiScripts.pinchZoomScript)

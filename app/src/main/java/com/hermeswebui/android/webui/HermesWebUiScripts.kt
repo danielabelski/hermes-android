@@ -6,14 +6,19 @@ object HermesWebUiScripts {
     /**
      * Wraps a runtime fallback script with an execution-time origin check. WebView evaluates
      * JavaScript asynchronously, so the page may have navigated after the native route check.
+     *
+     * [trustedOrigin] must already be canonicalized natively (see `UrlOrigins.pageOrigin`) so the
+     * guard can compare `window.location.origin` against a quoted string LITERAL. It deliberately
+     * does not call `new URL(...)`: `URL` is a page-controlled global that a hostile origin can
+     * replace before this asynchronously-evaluated script runs, making the constructor return that
+     * page's own origin and defeating the check.
      */
     fun buildOriginGuardedRuntimeScript(trustedOrigin: String, script: String): String {
         val quotedOrigin = JSONObject.quote(trustedOrigin)
         return """
             (function() {
               'use strict';
-              var trustedOrigin = new URL($quotedOrigin).origin;
-              if (window.location.origin !== trustedOrigin) return;
+              if (window.location.origin !== $quotedOrigin) return;
               $script
             })();
         """.trimIndent()

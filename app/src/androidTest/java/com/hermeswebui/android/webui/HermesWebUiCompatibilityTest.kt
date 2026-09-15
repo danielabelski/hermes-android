@@ -77,6 +77,34 @@ class HermesWebUiCompatibilityTest {
     }
 
     @Test
+    fun runtimeOriginGuard_resistsProviderPageReplacingTheUrlConstructor() {
+        loadFixture(
+            body = "<div id=\"provider-page\">OAuth provider</div>",
+            baseUrl = "https://oauth.provider.test/"
+        )
+
+        // A hostile/foreign page can replace window.URL before the delayed evaluateJavascript
+        // runs. A guard that resolved its trusted origin through `new URL(...)` would get this
+        // page's own origin back and execute. The guard must compare a literal instead.
+        evaluate(
+            """
+            window.URL = function() { return { origin: window.location.origin }; };
+            """.trimIndent()
+        )
+
+        val guardedPinchZoomScript = HermesWebUiScripts.buildOriginGuardedRuntimeScript(
+            trustedOrigin = "https://hermes.test",
+            script = HermesWebUiScripts.pinchZoomScript
+        )
+        evaluate(guardedPinchZoomScript)
+
+        assertThat(evaluate("document.querySelector('meta[name=\"viewport\"]').content"))
+            .isEqualTo("\"width=device-width,initial-scale=1\"")
+        assertThat(evaluateBoolean("window.location.origin === 'https://oauth.provider.test'"))
+            .isTrue()
+    }
+
+    @Test
     fun clarifyAutofocus_suppressesOnlyAutomaticClarifyFocus() {
         loadFixture(
             """

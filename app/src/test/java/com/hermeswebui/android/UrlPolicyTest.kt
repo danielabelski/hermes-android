@@ -113,4 +113,44 @@ class UrlPolicyTest {
         assertThat(UrlOrigins.normalizeOriginUrl(" https://hermes.example.com:8455/dashboard?x=1#status "))
             .isEqualTo("https://hermes.example.com:8455")
     }
+
+    @Test
+    fun `page origin keeps a non-default port`() {
+        assertThat(UrlOrigins.pageOrigin("https://hermes.example.com:8443/path"))
+            .isEqualTo("https://hermes.example.com:8443")
+        assertThat(UrlOrigins.pageOrigin("http://hermes.example.com:8787/path"))
+            .isEqualTo("http://hermes.example.com:8787")
+    }
+
+    @Test
+    fun `page origin drops an explicitly-specified default port`() {
+        // A browser reports window.location.origin WITHOUT the default port, so the guard literal
+        // must drop it too. documentStartOriginRule deliberately keeps it (it builds an allow-rule),
+        // which is exactly why the guard uses pageOrigin instead.
+        assertThat(UrlOrigins.pageOrigin("http://hermes.example.com:80/path"))
+            .isEqualTo("http://hermes.example.com")
+        assertThat(UrlOrigins.pageOrigin("https://hermes.example.com:443/path"))
+            .isEqualTo("https://hermes.example.com")
+        assertThat(UrlOrigins.documentStartOriginRule("http://hermes.example.com:80/path"))
+            .isEqualTo("http://hermes.example.com:80")
+    }
+
+    @Test
+    fun `page origin omits an absent port and lowercases the host`() {
+        assertThat(UrlOrigins.pageOrigin("https://Hermes.Example.COM/path"))
+            .isEqualTo("https://hermes.example.com")
+    }
+
+    @Test
+    fun `page origin rejects non-web schemes and malformed urls`() {
+        assertThat(UrlOrigins.pageOrigin("file:///etc/passwd")).isNull()
+        assertThat(UrlOrigins.pageOrigin("javascript:alert(1)")).isNull()
+        assertThat(UrlOrigins.pageOrigin("not a url")).isNull()
+    }
+
+    @Test
+    fun `page origin brackets an ipv6 host`() {
+        assertThat(UrlOrigins.pageOrigin("http://[::1]:8787/path"))
+            .isEqualTo("http://[::1]:8787")
+    }
 }
