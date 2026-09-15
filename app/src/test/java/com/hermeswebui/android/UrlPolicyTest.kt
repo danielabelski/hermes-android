@@ -206,6 +206,26 @@ class UrlPolicyTest {
     }
 
     @Test
+    fun `page origin recovers a host java URI rejects for a trailing-dot numeric address`() {
+        // java.net.URI returns a null host (and port -1) for these; the raw-authority fallback
+        // recovers both, so the runtime shims are not silently disabled on such a server URL.
+        assertThat(UrlOrigins.pageOrigin("http://127.0.0.1.:8787"))
+            .isEqualTo("http://127.0.0.1:8787")
+        assertThat(UrlOrigins.pageOrigin("http://2130706433.:8080"))
+            .isEqualTo("http://127.0.0.1:8080")
+        assertThat(UrlOrigins.pageOrigin("http://127.0.0.1.:80"))
+            .isEqualTo("http://127.0.0.1")
+    }
+
+    @Test
+    fun `page origin strips userinfo in the raw-authority fallback like a browser`() {
+        // A browser drops credentials from location.origin. On the URI-rejected fallback path the
+        // host is still recovered without the userinfo.
+        assertThat(UrlOrigins.pageOrigin("http://user:pass@127.0.0.1.:8787"))
+            .isEqualTo("http://127.0.0.1:8787")
+    }
+
+    @Test
     fun `page origin fails closed on an out-of-range numeric host`() {
         // These are numeric candidates the browser rejects outright. Returning the raw spelling
         // would emit a literal that can never match; null makes the caller skip injection.

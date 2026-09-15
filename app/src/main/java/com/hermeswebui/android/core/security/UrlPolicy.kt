@@ -138,11 +138,59 @@ object UrlOrigins {
             ?.lowercase(Locale.US)
             ?.takeIf { it == "http" || it == "https" }
             ?: return null
-        val host = uri.normalizedHost()?.takeIf { it.isNotBlank() } ?: return null
+        // java.net.URI is RFC 2396-strict and returns a null host for spellings a browser accepts
+        // (a trailing-dot IPv4 like `127.0.0.1.`, or `0x.0x.0x.0x`). Fall back to reading the raw
+        // authority so those still canonicalize instead of silently disabling every runtime shim.
+        // When URI rejects the host it also reports port -1, so the fallback recovers both.
+        val host: String
+        var port = uri.port
+        val normalized = uri.normalizedHost()
+        if (normalized != null && normalized.isNotBlank()) {
+            host = normalized
+        } else {
+            val raw = rawAuthorityHostPort(url) ?: return null
+            host = raw.first
+            raw.second?.let { port = it.toIntOrNull() ?: return null }
+        }
         val canonicalHost = canonicalBrowserHost(host) ?: return null
         val defaultPort = if (scheme == "https") 443 else 80
-        val portPart = if (uri.port != -1 && uri.port != defaultPort) ":${uri.port}" else ""
+        val portPart = if (port != -1 && port != defaultPort) ":$port" else ""
         return "$scheme://$canonicalHost$portPart"
+    }
+
+    /**
+     * Read (host, port?) from the raw authority, lowercased, for URLs `java.net.URI` parses but
+     * whose host it rejects. Userinfo (credentials) is stripped, matching a browser's
+     * `location.origin`. An authority we cannot read cleanly returns null so the caller fails
+     * closed.
+     */
+    private fun rawAuthorityHostPort(url: String): Pair<String, String?>? {
+        val afterScheme = url.substringAfter("://", "").ifEmpty { return null }
+        var authority = afterScheme.substringBefore('/').substringBefore('?').substringBefore('#')
+        if (authority.isEmpty()) return null
+        // A browser drops userinfo from the origin (`user:pass@host` → `host`).
+        if (authority.contains('@')) authority = authority.substringAfterLast('@')
+        if (authority.isEmpty()) return null
+        val host: String
+        var port: String? = null
+        if (authority.startsWith("[")) {
+            val end = authority.indexOf(']')
+            if (end < 0) return null
+            host = authority.substring(0, end + 1)
+            val rest = authority.substring(end + 1)
+            if (rest.startsWith(":")) port = rest.substring(1).ifEmpty { null }
+        } else {
+            val colon = authority.indexOf(':')
+            if (colon >= 0) {
+                host = authority.substring(0, colon)
+                port = authority.substring(colon + 1).ifEmpty { null }
+            } else {
+                host = authority
+            }
+        }
+        val lowered = host.lowercase(Locale.US)
+        if (lowered.isEmpty()) return null
+        return lowered to port
     }
 
     /**
