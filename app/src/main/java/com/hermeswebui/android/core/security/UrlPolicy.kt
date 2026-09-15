@@ -236,35 +236,28 @@ object UrlOrigins {
     }
 
     /**
-     * WHATWG IPv4 parsing: the host is numeric when every dot-separated part parses as a number
-     * (decimal, `0`-prefixed octal, or `0x`-prefixed hex). Fewer than four parts means the last
-     * part supplies the remaining bytes, so `2130706433` → `127.0.0.1`.
+     * WHATWG numeric-host handling. A host "ends in a number" when its last label (after dropping
+     * one trailing empty label) is all ASCII digits, or parses as an IPv4 number. Such a host MUST
+     * be a valid IPv4 address or a browser REJECTS it — so this returns [INVALID_NUMERIC_HOST]
+     * (caller fails closed), never a DNS pass-through. A host that does NOT end in a number is an
+     * ordinary DNS name and returns null so the caller passes it through unchanged.
      *
-     * Returns null when the host is not a numeric candidate at all (an ordinary DNS name, which
-     * the caller passes through unchanged). Returns [INVALID_NUMERIC_HOST] when it IS numeric but
-     * out of range — the browser rejects those, so the caller must fail closed rather than emit
-     * the raw spelling.
+     * Examples: `2130706433`→`127.0.0.1`; `010.0.0.1`→`8.0.0.1`; `foo.1`, `example.99`, `09`,
+     * `1..2.3` all end in a number but fail IPv4 parsing → rejected; `foo.1..` and
+     * `hermes.example.com` do not end in a number → DNS pass-through.
      */
     private fun ipv4FromNumericHost(host: String): String? {
-        // A single trailing dot is dropped before parsing: `2130706433.` and `127.0.0.1.` are the
-        // same hosts as their undotted forms (verified against Chromium).
-        val trimmed = if (host.endsWith(".")) host.dropLast(1) else host
-        if (trimmed.isEmpty()) return null
-        val parts = trimmed.split(".")
-        if (parts.size > 4) {
-            // An all-numeric host with more than four parts is an INVALID address, not a DNS
-            // name — the browser rejects `http://1.2.3.4.5` outright, so fail closed.
-            return if (parts.all { it.isNotEmpty() && parseIpv4Part(it) != null }) {
-                INVALID_NUMERIC_HOST
-            } else {
-                null
-            }
-        }
-        if (parts.any { it.isEmpty() }) return null
-        // Numeric-candidate test first: if ANY part fails to parse as a number this is a DNS name,
-        // not a malformed address, so the caller should pass it through untouched.
-        val numbers = parts.map { parseIpv4Part(it) ?: return null }
-        // From here the host IS numeric, so any range failure is a browser-rejected host.
+        // Split on '.', dropping exactly ONE trailing empty label (a single trailing dot).
+        var parts = host.split(".")
+        if (parts.size > 1 && parts.last().isEmpty()) parts = parts.dropLast(1)
+        if (parts.isEmpty()) return null
+        val last = parts.last()
+        val endsInNumber = (last.isNotEmpty() && last.all { it in '0'..'9' }) || parseIpv4Part(last) != null
+        if (!endsInNumber) return null // Ordinary DNS name — pass through unchanged.
+        // Ends in a number ⇒ must be a valid IPv4 address, else the browser rejects the whole host.
+        if (parts.size > 4) return INVALID_NUMERIC_HOST
+        if (parts.any { it.isEmpty() }) return INVALID_NUMERIC_HOST
+        val numbers = parts.map { parseIpv4Part(it) ?: return INVALID_NUMERIC_HOST }
         val lastMax = 1L shl (8 * (4 - numbers.size + 1))
         if (numbers.last() >= lastMax) return INVALID_NUMERIC_HOST
         if (numbers.dropLast(1).any { it > 255 }) return INVALID_NUMERIC_HOST
@@ -277,15 +270,18 @@ object UrlOrigins {
 
     /**
      * Parse one IPv4 part. `0x`/`0X` prefix is hex, a leading `0` is octal, otherwise decimal.
-     * A bare `0x` (empty hex payload) is zero, matching Chromium: `http://0x` → `http://0.0.0.0`.
+     * A bare `0`, `0x` or `0X` (empty payload after the prefix) is zero, matching Chromium
+     * (`http://0x` → `http://0.0.0.0`). A completely empty part is failure (null), so a host with
+     * an interior empty label (`1..2.3`) is rejected rather than parsed.
      */
     private fun parseIpv4Part(part: String): Long? {
+        if (part.isEmpty()) return null
         val (radix, digits) = when {
             part.length >= 2 && (part.startsWith("0x") || part.startsWith("0X")) -> 16 to part.substring(2)
             part.startsWith("0") -> 8 to part.substring(1)
             else -> 10 to part
         }
-        // An empty payload means the part was exactly "0", "0x" or "0X" — all of which are zero.
+        // Empty payload here means the part was exactly "0", "0x" or "0X" — all zero.
         if (digits.isEmpty()) return 0L
         if (digits.any { Character.digit(it, radix) < 0 }) return null
         return digits.toLongOrNull(radix)?.takeIf { it >= 0 }

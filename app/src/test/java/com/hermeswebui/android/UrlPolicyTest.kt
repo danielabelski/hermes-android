@@ -260,6 +260,31 @@ class UrlPolicyTest {
     }
 
     @Test
+    fun `page origin fails closed on a host that ends in a number but is not valid ipv4`() {
+        // WHATWG: if a host's last label ends in a number, the whole host must parse as IPv4 or
+        // the browser rejects it. Passing these through as DNS names would emit a literal that
+        // never matches location.origin.
+        assertThat(UrlOrigins.pageOrigin("http://foo.1")).isNull()
+        assertThat(UrlOrigins.pageOrigin("http://example.99")).isNull()
+        assertThat(UrlOrigins.pageOrigin("http://09")).isNull()
+        assertThat(UrlOrigins.pageOrigin("http://1..2.3")).isNull()
+        assertThat(UrlOrigins.pageOrigin("http://1.2.3.09")).isNull()
+        assertThat(UrlOrigins.pageOrigin("http://a.b.c.1")).isNull()
+    }
+
+    @Test
+    fun `page origin passes through a dns name that does not end in a number`() {
+        // Not-ending-in-a-number is an ordinary DNS name, kept verbatim (incl. a trailing dot,
+        // which a browser keeps for a name but drops for a numeric address).
+        assertThat(UrlOrigins.pageOrigin("http://web3.example.com"))
+            .isEqualTo("http://web3.example.com")
+        assertThat(UrlOrigins.pageOrigin("http://node1.local"))
+            .isEqualTo("http://node1.local")
+        assertThat(UrlOrigins.pageOrigin("http://foo.1.."))
+            .isEqualTo("http://foo.1..")
+    }
+
+    @Test
     fun `page origin returns null for a host it cannot canonicalize`() {
         // Better to skip injection than to emit a literal that can never match.
         assertThat(UrlOrigins.pageOrigin("http://[not-an-ip]:8787")).isNull()
