@@ -153,4 +153,43 @@ class UrlPolicyTest {
         assertThat(UrlOrigins.pageOrigin("http://[::1]:8787/path"))
             .isEqualTo("http://[::1]:8787")
     }
+
+    @Test
+    fun `page origin canonicalizes an expanded ipv6 literal the way a browser does`() {
+        // A browser reports location.origin after WHATWG host parsing, which compresses IPv6.
+        // Emitting the expanded spelling would make the guard literal never match, silently
+        // suppressing every runtime script on such a configured server.
+        assertThat(UrlOrigins.pageOrigin("http://[0:0:0:0:0:0:0:1]:80"))
+            .isEqualTo("http://[::1]")
+        assertThat(UrlOrigins.pageOrigin("http://[2001:0db8:0000:0000:0000:0000:1428:57ab]:9000"))
+            .isEqualTo("http://[2001:db8::1428:57ab]")
+        assertThat(UrlOrigins.pageOrigin("http://[fe80:0:0:0:0:0:0:1]"))
+            .isEqualTo("http://[fe80::1]")
+        assertThat(UrlOrigins.pageOrigin("http://[0:0:0:0:0:0:0:0]"))
+            .isEqualTo("http://[::]")
+        // Longest zero-run wins; a shorter run stays expanded.
+        assertThat(UrlOrigins.pageOrigin("http://[1:0:0:2:0:0:0:3]:8787"))
+            .isEqualTo("http://[1:0:0:2::3]:8787")
+        // An embedded dotted-quad is re-serialized as hextets.
+        assertThat(UrlOrigins.pageOrigin("http://[::ffff:127.0.0.1]:8787"))
+            .isEqualTo("http://[::ffff:7f00:1]:8787")
+    }
+
+    @Test
+    fun `page origin canonicalizes numeric ipv4 hosts the way a browser does`() {
+        assertThat(UrlOrigins.pageOrigin("http://2130706433")).isEqualTo("http://127.0.0.1")
+        assertThat(UrlOrigins.pageOrigin("http://0x7f000001")).isEqualTo("http://127.0.0.1")
+        // A leading zero means octal: 010 == 8.
+        assertThat(UrlOrigins.pageOrigin("http://010.0.0.1")).isEqualTo("http://8.0.0.1")
+        // Already-canonical dotted-decimal is untouched.
+        assertThat(UrlOrigins.pageOrigin("http://192.168.1.10:8787"))
+            .isEqualTo("http://192.168.1.10:8787")
+    }
+
+    @Test
+    fun `page origin returns null for a host it cannot canonicalize`() {
+        // Better to skip injection than to emit a literal that can never match.
+        assertThat(UrlOrigins.pageOrigin("http://[not-an-ip]:8787")).isNull()
+        assertThat(UrlOrigins.pageOrigin("http://[::1::2]:8787")).isNull()
+    }
 }
