@@ -47,6 +47,14 @@ class UrlPolicy(private val allowedHosts: Set<String>) {
 }
 
 object UrlOrigins {
+    /**
+     * Sentinel returned by [ipv4FromNumericHost] when a host IS a numeric-IPv4 candidate but is
+     * out of range (e.g. `http://999.1.1.1`). A browser rejects such a host outright, so the
+     * caller must fail closed rather than fall through and emit the raw spelling. Compared by
+     * identity (`===`), never by value.
+     */
+    private val INVALID_NUMERIC_HOST = String()
+
     fun hostFrom(url: String): String? {
         return url.toUriOrNull()?.normalizedHost()?.takeIf { it.isNotBlank() }
     }
@@ -158,8 +166,10 @@ object UrlOrigins {
             val compressed = compressIpv6(host) ?: return null
             return "[$compressed]"
         }
-        ipv4FromNumericHost(host)?.let { return it }
-        // A dotted-decimal host is already in browser form; ordinary DNS names are too.
+        ipv4FromNumericHost(host)?.let { return if (it === INVALID_NUMERIC_HOST) null else it }
+        // Ordinary DNS names pass through verbatim — including a trailing dot, which a browser
+        // KEEPS in location.origin for a name (`http://example.com.`) even though it drops one
+        // from a numeric address (`http://2130706433.` → `http://127.0.0.1`).
         return host
     }
 
@@ -167,16 +177,35 @@ object UrlOrigins {
      * WHATWG IPv4 parsing: the host is numeric when every dot-separated part parses as a number
      * (decimal, `0`-prefixed octal, or `0x`-prefixed hex). Fewer than four parts means the last
      * part supplies the remaining bytes, so `2130706433` → `127.0.0.1`.
+     *
+     * Returns null when the host is not a numeric candidate at all (an ordinary DNS name, which
+     * the caller passes through unchanged). Returns [INVALID_NUMERIC_HOST] when it IS numeric but
+     * out of range — the browser rejects those, so the caller must fail closed rather than emit
+     * the raw spelling.
      */
     private fun ipv4FromNumericHost(host: String): String? {
-        val parts = host.split(".")
-        if (parts.isEmpty() || parts.size > 4) return null
+        // A single trailing dot is dropped before parsing: `2130706433.` and `127.0.0.1.` are the
+        // same hosts as their undotted forms (verified against Chromium).
+        val trimmed = if (host.endsWith(".")) host.dropLast(1) else host
+        if (trimmed.isEmpty()) return null
+        val parts = trimmed.split(".")
+        if (parts.size > 4) {
+            // An all-numeric host with more than four parts is an INVALID address, not a DNS
+            // name — the browser rejects `http://1.2.3.4.5` outright, so fail closed.
+            return if (parts.all { it.isNotEmpty() && parseIpv4Part(it) != null }) {
+                INVALID_NUMERIC_HOST
+            } else {
+                null
+            }
+        }
         if (parts.any { it.isEmpty() }) return null
+        // Numeric-candidate test first: if ANY part fails to parse as a number this is a DNS name,
+        // not a malformed address, so the caller should pass it through untouched.
         val numbers = parts.map { parseIpv4Part(it) ?: return null }
-        // All parts numeric. The last part fills the remaining low-order bytes.
+        // From here the host IS numeric, so any range failure is a browser-rejected host.
         val lastMax = 1L shl (8 * (4 - numbers.size + 1))
-        if (numbers.last() >= lastMax) return null
-        if (numbers.dropLast(1).any { it > 255 }) return null
+        if (numbers.last() >= lastMax) return INVALID_NUMERIC_HOST
+        if (numbers.dropLast(1).any { it > 255 }) return INVALID_NUMERIC_HOST
         var value = numbers.last()
         numbers.dropLast(1).forEachIndexed { index, part ->
             value += part shl (8 * (3 - index))
@@ -184,13 +213,19 @@ object UrlOrigins {
         return "${(value shr 24) and 0xFF}.${(value shr 16) and 0xFF}.${(value shr 8) and 0xFF}.${value and 0xFF}"
     }
 
+    /**
+     * Parse one IPv4 part. `0x`/`0X` prefix is hex, a leading `0` is octal, otherwise decimal.
+     * A bare `0x` (empty hex payload) is zero, matching Chromium: `http://0x` → `http://0.0.0.0`.
+     */
     private fun parseIpv4Part(part: String): Long? {
         val (radix, digits) = when {
             part.length >= 2 && (part.startsWith("0x") || part.startsWith("0X")) -> 16 to part.substring(2)
-            part.length >= 2 && part.startsWith("0") -> 8 to part.substring(1)
+            part.startsWith("0") -> 8 to part.substring(1)
             else -> 10 to part
         }
-        if (digits.isEmpty()) return if (radix == 8 || radix == 10) 0L else null
+        // An empty payload means the part was exactly "0", "0x" or "0X" — all of which are zero.
+        if (digits.isEmpty()) return 0L
+        if (digits.any { Character.digit(it, radix) < 0 }) return null
         return digits.toLongOrNull(radix)?.takeIf { it >= 0 }
     }
 
@@ -291,11 +326,13 @@ object UrlOrigins {
     private fun ipv4ToGroups(text: String): IntArray? {
         val quad = text.split(".")
         if (quad.size != 4) return null
+        // Chromium applies the same radix-aware part parsing here as for a bare IPv4 host, so
+        // `[::ffff:127.0.0.010]` is `…:7f00:8` (octal 010 == 8), not `…:7f00:a`. Each of the four
+        // components must still fit in one byte.
         val bytes = quad.map { part ->
-            if (part.isEmpty() || part.length > 3 || part.any { !it.isDigit() }) return null
-            val value = part.toInt()
+            val value = parseIpv4Part(part) ?: return null
             if (value > 255) return null
-            value
+            value.toInt()
         }
         return intArrayOf((bytes[0] shl 8) or bytes[1], (bytes[2] shl 8) or bytes[3])
     }

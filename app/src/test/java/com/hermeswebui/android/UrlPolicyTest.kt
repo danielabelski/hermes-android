@@ -173,6 +173,12 @@ class UrlPolicyTest {
         // An embedded dotted-quad is re-serialized as hextets.
         assertThat(UrlOrigins.pageOrigin("http://[::ffff:127.0.0.1]:8787"))
             .isEqualTo("http://[::ffff:7f00:1]:8787")
+        // The embedded quad uses the SAME radix-aware part parsing as a bare IPv4 host, so
+        // octal 010 == 8 (…:7f00:8), not decimal 10 (…:7f00:a).
+        assertThat(UrlOrigins.pageOrigin("http://[::ffff:127.0.0.010]:18770"))
+            .isEqualTo("http://[::ffff:7f00:8]:18770")
+        assertThat(UrlOrigins.pageOrigin("http://[::ffff:1.2.3.04]:80"))
+            .isEqualTo("http://[::ffff:102:304]")
     }
 
     @Test
@@ -181,9 +187,32 @@ class UrlPolicyTest {
         assertThat(UrlOrigins.pageOrigin("http://0x7f000001")).isEqualTo("http://127.0.0.1")
         // A leading zero means octal: 010 == 8.
         assertThat(UrlOrigins.pageOrigin("http://010.0.0.1")).isEqualTo("http://8.0.0.1")
+        // A bare `0x` is an empty hex payload, which is zero.
+        assertThat(UrlOrigins.pageOrigin("http://0x")).isEqualTo("http://0.0.0.0")
+        assertThat(UrlOrigins.pageOrigin("http://0x.0x.0x.0x")).isEqualTo("http://0.0.0.0")
+        // A numeric host drops a single trailing dot.
+        assertThat(UrlOrigins.pageOrigin("http://2130706433.")).isEqualTo("http://127.0.0.1")
+        assertThat(UrlOrigins.pageOrigin("http://127.0.0.1.")).isEqualTo("http://127.0.0.1")
         // Already-canonical dotted-decimal is untouched.
         assertThat(UrlOrigins.pageOrigin("http://192.168.1.10:8787"))
             .isEqualTo("http://192.168.1.10:8787")
+    }
+
+    @Test
+    fun `page origin keeps a trailing dot on a dns name`() {
+        // A browser drops a trailing dot from a NUMERIC host but keeps it on a name.
+        assertThat(UrlOrigins.pageOrigin("http://hermes.example.com."))
+            .isEqualTo("http://hermes.example.com.")
+    }
+
+    @Test
+    fun `page origin fails closed on an out-of-range numeric host`() {
+        // These are numeric candidates the browser rejects outright. Returning the raw spelling
+        // would emit a literal that can never match; null makes the caller skip injection.
+        assertThat(UrlOrigins.pageOrigin("http://999.1.1.1")).isNull()
+        assertThat(UrlOrigins.pageOrigin("http://256.1.1.1")).isNull()
+        assertThat(UrlOrigins.pageOrigin("http://4294967296")).isNull()
+        assertThat(UrlOrigins.pageOrigin("http://1.2.3.4.5")).isNull()
     }
 
     @Test
@@ -191,5 +220,9 @@ class UrlPolicyTest {
         // Better to skip injection than to emit a literal that can never match.
         assertThat(UrlOrigins.pageOrigin("http://[not-an-ip]:8787")).isNull()
         assertThat(UrlOrigins.pageOrigin("http://[::1::2]:8787")).isNull()
+        // A URI-ADMITTED host that canonicalization must still reject. This one matters for
+        // mutation coverage: java.net.URI accepts it, so it reaches canonicalBrowserHost and the
+        // assertion fails if canonicalization is reduced to `return host`.
+        assertThat(UrlOrigins.pageOrigin("http://[1:2:3:4:5:6:7:8:9]")).isNull()
     }
 }
