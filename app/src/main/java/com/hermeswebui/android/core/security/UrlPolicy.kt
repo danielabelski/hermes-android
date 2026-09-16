@@ -202,8 +202,17 @@ object UrlOrigins {
         }
         val lowered = host.lowercase(Locale.US)
         if (lowered.isEmpty()) return null
-        // We do not decode/IDNA in this fallback, so refuse anything that would need it.
-        if (lowered.any { it.code > 0x7F } || lowered.contains('%')) return null
+        // This fallback exists only to recover hosts java.net.URI wrongly rejects while a browser
+        // accepts them. It does NOT implement WHATWG percent-encoding or IDNA, so it accepts a host
+        // verbatim ONLY when every character is one a browser also keeps verbatim in a host: the
+        // LDH set plus `_` and `~` (which covers every real hostname and IP spelling — verified
+        // against Chromium). Anything else (`*`, space, `(`, non-ASCII, `%`, …) a browser would
+        // percent-encode or reject, so fail closed rather than emit a divergent literal. A
+        // bracketed IPv6 literal is already accepted by URI and never reaches here.
+        if (lowered.startsWith("[")) return null
+        if (!lowered.all { it in 'a'..'z' || it in '0'..'9' || it == '.' || it == '-' || it == '_' || it == '~' }) {
+            return null
+        }
         return lowered to port
     }
 
@@ -252,8 +261,10 @@ object UrlOrigins {
         if (parts.size > 1 && parts.last().isEmpty()) parts = parts.dropLast(1)
         if (parts.isEmpty()) return null
         val last = parts.last()
-        val endsInNumber = (last.isNotEmpty() && last.all { it in '0'..'9' }) || parseIpv4Part(last) != null
-        if (!endsInNumber) return null // Ordinary DNS name — pass through unchanged.
+        // "Ends in a number" is a SYNTAX test, independent of whether the value fits in a Long:
+        // `0x8000000000000000` ends in a number (and overflows) — it must fail closed, not be
+        // mistaken for a DNS name.
+        if (!ipv4PartLooksNumeric(last)) return null // Ordinary DNS name — pass through unchanged.
         // Ends in a number ⇒ must be a valid IPv4 address, else the browser rejects the whole host.
         if (parts.size > 4) return INVALID_NUMERIC_HOST
         if (parts.any { it.isEmpty() }) return INVALID_NUMERIC_HOST
@@ -269,10 +280,33 @@ object UrlOrigins {
     }
 
     /**
-     * Parse one IPv4 part. `0x`/`0X` prefix is hex, a leading `0` is octal, otherwise decimal.
-     * A bare `0`, `0x` or `0X` (empty payload after the prefix) is zero, matching Chromium
-     * (`http://0x` → `http://0.0.0.0`). A completely empty part is failure (null), so a host with
-     * an interior empty label (`1..2.3`) is rejected rather than parsed.
+     * True when [part] "looks like" a WHATWG IPv4 number — the SYNTAX test that decides whether a
+     * host "ends in a number", independent of magnitude AND of octal validity:
+     *  - any non-empty run of ASCII digits (`09`, `019`, `999`, an overflowing decimal) — note
+     *    `09` looks numeric even though it is an INVALID octal, because a browser still treats it
+     *    as a (failed) IPv4 address and rejects the host rather than treating it as a DNS name;
+     *  - a `0x`/`0X` prefix followed by zero or more VALID hex digits (`0x`, `0xff`,
+     *    `0x8000000000000000`) — but NOT `0x1g`, whose bad hex digit makes it an ordinary name.
+     * Magnitude/octal-digit validity is enforced later by [parseIpv4Part].
+     */
+    private fun ipv4PartLooksNumeric(part: String): Boolean {
+        if (part.isEmpty()) return false
+        if (part.all { it in '0'..'9' }) return true
+        if (part.length >= 2 && (part.startsWith("0x") || part.startsWith("0X"))) {
+            val hex = part.substring(2)
+            return hex.isEmpty() || hex.all { Character.digit(it, 16) >= 0 }
+        }
+        return false
+    }
+
+    /**
+     * Parse one IPv4 part to its value, or null if it is not a valid numeric part (bad octal digit
+     * like the `9` in `09`, a bad hex digit, or an overflow of Long). Callers that have already
+     * established the host "ends in a number" via [ipv4PartLooksNumeric] treat a null here as
+     * INVALID_NUMERIC_HOST (fail closed), not as a DNS name.
+     *
+     * A bare `0`, `0x` or `0X` (empty payload after the prefix) is the number zero, matching
+     * Chromium (`http://0x` → `http://0.0.0.0`).
      */
     private fun parseIpv4Part(part: String): Long? {
         if (part.isEmpty()) return null
@@ -281,7 +315,6 @@ object UrlOrigins {
             part.startsWith("0") -> 8 to part.substring(1)
             else -> 10 to part
         }
-        // Empty payload here means the part was exactly "0", "0x" or "0X" — all zero.
         if (digits.isEmpty()) return 0L
         if (digits.any { Character.digit(it, radix) < 0 }) return null
         return digits.toLongOrNull(radix)?.takeIf { it >= 0 }

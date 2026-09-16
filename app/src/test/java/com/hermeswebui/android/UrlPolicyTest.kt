@@ -270,6 +270,30 @@ class UrlPolicyTest {
         assertThat(UrlOrigins.pageOrigin("http://1..2.3")).isNull()
         assertThat(UrlOrigins.pageOrigin("http://1.2.3.09")).isNull()
         assertThat(UrlOrigins.pageOrigin("http://a.b.c.1")).isNull()
+        // A syntactically-numeric part that OVERFLOWS a Long still "ends in a number" and must
+        // fail closed, not be mistaken for a DNS name.
+        assertThat(UrlOrigins.pageOrigin("http://0x8000000000000000")).isNull()
+        assertThat(UrlOrigins.pageOrigin("http://1.2.3.0x8000000000000000")).isNull()
+    }
+
+    @Test
+    fun `page origin recovers a name with underscore or tilde that java URI rejects`() {
+        // java.net.URI rejects `_`; a browser keeps it verbatim. The fallback accepts the LDH set
+        // plus `_` and `~` (every real hostname), so Docker/internal names still get the shims.
+        assertThat(UrlOrigins.pageOrigin("http://foo_bar")).isEqualTo("http://foo_bar")
+        assertThat(UrlOrigins.pageOrigin("http://my_host.local:8787"))
+            .isEqualTo("http://my_host.local:8787")
+        assertThat(UrlOrigins.pageOrigin("http://foo~bar")).isEqualTo("http://foo~bar")
+    }
+
+    @Test
+    fun `page origin fails closed on a raw host with a browser-encoded character`() {
+        // These reach the raw-authority fallback (URI rejects them) and carry a char a browser
+        // percent-encodes (`*`→`%2A`, space→`%20`). We do not encode, so we fail closed rather
+        // than emit a divergent literal. No real self-hosted server URL uses these.
+        assertThat(UrlOrigins.pageOrigin("http://foo*bar")).isNull()
+        assertThat(UrlOrigins.pageOrigin("http://foo(bar)")).isNull()
+        assertThat(UrlOrigins.pageOrigin("http://foo bar")).isNull()
     }
 
     @Test
