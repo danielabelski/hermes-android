@@ -5,6 +5,45 @@ import org.junit.Test
 
 class HermesWebUiScriptsTest {
     @Test
+    fun `runtime script builder checks current origin before executing payload`() {
+        val script = HermesWebUiScripts.buildOriginGuardedRuntimeScript(
+            trustedOrigin = "https://hermes.example.com:8443",
+            script = "window.__runtimePayloadExecuted = true;"
+        )
+
+        assertThat(script).contains(
+            "if (window.location.origin !== \"https://hermes.example.com:8443\") return;"
+        )
+        assertThat(script).contains("window.__runtimePayloadExecuted = true;")
+    }
+
+    @Test
+    fun `runtime guard compares a literal and never calls the page-controlled URL constructor`() {
+        // A hostile page can replace window.URL before this asynchronously-evaluated script runs.
+        // If the guard resolved the trusted origin via `new URL(...)`, the replacement would return
+        // the hostile page's own origin and the payload would execute off-origin.
+        val script = HermesWebUiScripts.buildOriginGuardedRuntimeScript(
+            trustedOrigin = "https://hermes.example.com:8443",
+            script = "window.__runtimePayloadExecuted = true;"
+        )
+
+        assertThat(script).doesNotContain("new URL(")
+        assertThat(script).doesNotContain("trustedOrigin")
+    }
+
+    @Test
+    fun `pinch zoom script overrides restrictive viewport directives`() {
+        val script = HermesWebUiScripts.pinchZoomScript
+
+        assertThat(script).contains("meta[name=\"viewport\"]")
+        assertThat(script).contains("/^user-scalable\\s*=/i")
+        assertThat(script).contains("/^maximum-scale\\s*=/i")
+        assertThat(script).contains("directives.push('maximum-scale=5')")
+        assertThat(script).contains("directives.push('user-scalable=yes')")
+        assertThat(script).contains("new MutationObserver")
+    }
+
+    @Test
     fun `app settings script preserves folded navigation selectors`() {
         val script = HermesWebUiScripts.appSettingsEntryScript
 

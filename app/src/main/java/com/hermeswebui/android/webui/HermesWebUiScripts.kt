@@ -4,6 +4,63 @@ import org.json.JSONObject
 
 object HermesWebUiScripts {
     /**
+     * Wraps a runtime fallback script with an execution-time origin check. WebView evaluates
+     * JavaScript asynchronously, so the page may have navigated after the native route check.
+     *
+     * [trustedOrigin] must already be canonicalized natively (see `UrlOrigins.pageOrigin`) so the
+     * guard can compare `window.location.origin` against a quoted string LITERAL. It deliberately
+     * does not call `new URL(...)`: `URL` is a page-controlled global that a hostile origin can
+     * replace before this asynchronously-evaluated script runs, making the constructor return that
+     * page's own origin and defeating the check.
+     */
+    fun buildOriginGuardedRuntimeScript(trustedOrigin: String, script: String): String {
+        val quotedOrigin = JSONObject.quote(trustedOrigin)
+        return """
+            (function() {
+              'use strict';
+              if (window.location.origin !== $quotedOrigin) return;
+              $script
+            })();
+        """.trimIndent()
+    }
+
+    /**
+     * Keeps pinch-to-zoom available even when Hermes WebUI's viewport metadata disables
+     * browser scaling. The observer covers the document-start case where the meta element
+     * is parsed after this script runs.
+     */
+    val pinchZoomScript = """
+        (function() {
+          'use strict';
+
+          var enablePinchZoom = function() {
+            var viewport = document.querySelector('meta[name="viewport"]');
+            if (!viewport) return false;
+
+            var directives = viewport.content
+              .split(',')
+              .map(function(value) { return value.trim(); })
+              .filter(function(value) {
+                return value &&
+                  !/^user-scalable\s*=/i.test(value) &&
+                  !/^maximum-scale\s*=/i.test(value);
+              });
+            directives.push('maximum-scale=5');
+            directives.push('user-scalable=yes');
+            viewport.content = directives.join(', ');
+            return true;
+          };
+
+          if (enablePinchZoom()) return;
+
+          var observer = new MutationObserver(function() {
+            if (enablePinchZoom()) observer.disconnect();
+          });
+          observer.observe(document, { childList: true, subtree: true });
+        })();
+    """.trimIndent()
+
+    /**
      * Hybrid Viewport Polyfill for Android WebView
      *
      * Android System WebView has a bug where CSS viewport units (vh, dvh, svh, lvh) can

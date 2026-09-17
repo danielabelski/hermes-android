@@ -21,6 +21,9 @@ object HermesWebViewConfigurator {
             allowFileAccess = false
             allowContentAccess = false
             loadsImagesAutomatically = true
+            setSupportZoom(true)
+            builtInZoomControls = true
+            displayZoomControls = false
             mediaPlaybackRequiresUserGesture = true
             mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
             javaScriptCanOpenWindowsAutomatically = true
@@ -51,6 +54,9 @@ object HermesWebViewConfigurator {
             allowFileAccess = false
             allowContentAccess = false
             loadsImagesAutomatically = true
+            setSupportZoom(true)
+            builtInZoomControls = true
+            displayZoomControls = false
             mediaPlaybackRequiresUserGesture = true
             mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
             setSupportMultipleWindows(true)

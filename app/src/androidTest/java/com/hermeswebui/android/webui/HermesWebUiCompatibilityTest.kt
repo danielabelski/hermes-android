@@ -42,6 +42,69 @@ class HermesWebUiCompatibilityTest {
     }
 
     @Test
+    fun runtimeOriginGuard_staleHermesCallbackDoesNotMutateCurrentProviderPage() {
+        loadFixture(
+            body = "<div id=\"provider-page\">OAuth provider</div>",
+            baseUrl = "https://oauth.provider.test/"
+        )
+        val guardedPinchZoomScript = HermesWebUiScripts.buildOriginGuardedRuntimeScript(
+            trustedOrigin = "https://hermes.test",
+            script = HermesWebUiScripts.pinchZoomScript
+        )
+
+        // Models a delayed runtime fallback queued from a stale Hermes page callback: the
+        // current document is already the provider page when evaluateJavascript executes.
+        evaluate(guardedPinchZoomScript)
+
+        assertThat(evaluate("document.querySelector('meta[name=\"viewport\"]').content"))
+            .isEqualTo("\"width=device-width,initial-scale=1\"")
+        assertThat(evaluateBoolean("window.location.origin === 'https://oauth.provider.test'"))
+            .isTrue()
+    }
+
+    @Test
+    fun runtimeOriginGuard_executesOnConfiguredHermesOrigin() {
+        loadFixture(body = "<div>Hermes</div>")
+        val guardedPinchZoomScript = HermesWebUiScripts.buildOriginGuardedRuntimeScript(
+            trustedOrigin = "https://hermes.test",
+            script = HermesWebUiScripts.pinchZoomScript
+        )
+
+        evaluate(guardedPinchZoomScript)
+
+        assertThat(evaluate("document.querySelector('meta[name=\"viewport\"]').content"))
+            .isEqualTo("\"width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes\"")
+    }
+
+    @Test
+    fun runtimeOriginGuard_resistsProviderPageReplacingTheUrlConstructor() {
+        loadFixture(
+            body = "<div id=\"provider-page\">OAuth provider</div>",
+            baseUrl = "https://oauth.provider.test/"
+        )
+
+        // A hostile/foreign page can replace window.URL before the delayed evaluateJavascript
+        // runs. A guard that resolved its trusted origin through `new URL(...)` would get this
+        // page's own origin back and execute. The guard must compare a literal instead.
+        evaluate(
+            """
+            window.URL = function() { return { origin: window.location.origin }; };
+            """.trimIndent()
+        )
+
+        val guardedPinchZoomScript = HermesWebUiScripts.buildOriginGuardedRuntimeScript(
+            trustedOrigin = "https://hermes.test",
+            script = HermesWebUiScripts.pinchZoomScript
+        )
+        evaluate(guardedPinchZoomScript)
+
+        assertThat(evaluate("document.querySelector('meta[name=\"viewport\"]').content"))
+            .isEqualTo("\"width=device-width,initial-scale=1\"")
+        assertThat(evaluateBoolean("window.location.origin === 'https://oauth.provider.test'"))
+            .isTrue()
+    }
+
+    @Test
     fun clarifyAutofocus_suppressesOnlyAutomaticClarifyFocus() {
         loadFixture(
             """
@@ -345,7 +408,7 @@ class HermesWebUiCompatibilityTest {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun loadFixture(body: String) {
+    private fun loadFixture(body: String, baseUrl: String = "https://hermes.test/") {
         val loaded = CountDownLatch(1)
         composeTestRule.setContent {
             WebViewHost { view ->
@@ -360,7 +423,7 @@ class HermesWebUiCompatibilityTest {
                     }
                 }
                 view.loadDataWithBaseURL(
-                    "https://hermes.test/",
+                    baseUrl,
                     "<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head><body>$body</body></html>",
                     "text/html",
                     "UTF-8",
