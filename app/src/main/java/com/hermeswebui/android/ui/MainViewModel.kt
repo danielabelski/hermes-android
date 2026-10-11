@@ -544,6 +544,7 @@ class MainViewModel(
         cancelAutoRetry(clearDeferredPageError = true)
         settingsRepository.saveAppUrls(serverUrl, dashboardUrl)
         val refreshed = settingsRepository.getSettings(defaultUrl, defaultDashboardUrl)
+        refreshProfiles()
         _uiState.update {
             it.copy(
                 settings = refreshed,
@@ -556,6 +557,12 @@ class MainViewModel(
                 serverValidation = ServerValidationUiState()
             )
         }
+    }
+
+    fun refreshSettingsFromRepository() {
+        val refreshed = settingsRepository.getSettings(defaultUrl, defaultDashboardUrl)
+        refreshProfiles()
+        _uiState.update { it.copy(settings = refreshed) }
     }
 
     override fun onCleared() {

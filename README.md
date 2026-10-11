@@ -124,6 +124,7 @@ If a change belongs to Hermes everywhere, it belongs in WebUI first.
 - Forced WebView darkening disabled so Hermes controls its own visual presentation
 - Local network permission handling for Android 16+ so LAN-hosted Hermes WebUI instances can load inside the WebView
 - Microphone compatibility handling so trusted Hermes pages can use Android-supported capture paths
+- Spoken replies can play without a fresh tap on the trusted WebUI route. Android denies new microphone requests while not resumed and dispatches a proposed `hermes-app-foreground` host signal; current WebUI does not consume it. Stopping existing capture/playback and requiring explicit re-arm depend on WebUI support (tracked in [#120](https://github.com/hermes-webui/hermes-android/pull/120)).
 - OAuth/OIDC callback handling that keeps trusted sign-in flows in-app until the declared Hermes callback returns
 
 ### Real Android integration
@@ -260,6 +261,16 @@ python tools/check_markdown.py
 The docs-only CI short-circuit is fail-safe: only a non-empty diff containing
 Markdown files exclusively can skip the Android Gradle gates. Unreadable,
 empty, invalid, renamed, or mixed diffs run the full suite.
+
+CI runs the full debug unit suite, including Android voice ownership,
+microphone permission lifecycle, and selected-server navigation regressions.
+Android source/build changes run
+unfiltered instrumentation on API 35 and 36; releases repeat the full API 36
+suite. Selected-server instrumentation uses isolated encrypted preferences to
+check active-profile repair, edited-server persistence, allowlists, and
+startup/reconnect trust. Tooling contracts reject narrowed test commands.
+These Android checks do not prove upstream WebUI's foreground-event consumer
+or end-to-end voice conversation behavior.
 
 Release automation is centered on:
 

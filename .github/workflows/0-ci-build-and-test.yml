@@ -201,6 +201,9 @@ jobs:
 
       - name: Run unit tests
         if: needs.changes.outputs.docs_only != 'true'
+        # Full discovery includes voice ownership, microphone permission lifecycle,
+        # and selected-server policies.
+        # tools/tests/test_pr_regression_workflow.py guards against narrowing this suite.
         run: ./gradlew --no-daemon testDebugUnitTest
 
       - name: Upload unit test reports
@@ -335,6 +338,8 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Run Android instrumentation tests
+        # Keep unfiltered: includes encrypted selected-server persistence/navigation
+        # and Android WebView/service regressions, not upstream WebUI voice behavior.
         uses: reactivecircus/android-emulator-runner@4c44018e59b437e86cdfc41da381398f93ed8808 # v2.38.0
         with:
           api-level: ${{ matrix.api-level }}

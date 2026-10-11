@@ -32,6 +32,29 @@ Recent cleanup keeps `MainActivity` as the Android boundary while moving cluster
 - `HermesWebViewConfigurator`: centralizes shared main/popup WebView hardening and settings setup.
 - `HermesWebViewDownloadListener`: hands allowlisted WebView downloads to Android DownloadManager with session cookies and the WebView user agent. AndroidX WebKit's RFC-compatible filename parser honors `filename*` over `filename` and preserves server-provided extensions even with generic MIME types. Explicit image downloads also retain filenames from inline preview headers; filenames cannot introduce nested destination paths. Emulator regression tests exercise the production listener and downloaded bytes for both chat and Files endpoints.
 
+Selected-server persistence reconciles a missing or dangling active profile ID
+against the normalized configured URL. A valid active profile takes precedence
+over stale `server_url` state. Adding a row for the configured URL makes it
+Current when nothing else is active. Current-profile edits update settings:
+cosmetic URL changes and renames do not reload, same-origin mount changes load
+the edited URL without clearing session data, and origin/port changes perform
+the full session-clearing switch. Manual URL saves also refresh the Settings
+profile markers.
+
+Voice capture, wake detection, STT, TTS, and re-arm behavior remain WebUI-owned.
+`VoiceCaptureLifecycleGate` denies new requests while not resumed; pending
+trusted RECORD_AUDIO results can be granted while started before resume.
+Android dispatches the proposed `hermes-app-foreground` host signal, suppressing
+pause notification while its permission prompt is pending. Current WebUI does
+not consume it, so existing capture/playback shutdown, cancellation of listening
+restarts, and explicit re-arm remain upstream work tracked by
+[PR #120](https://github.com/hermes-webui/hermes-android/pull/120).
+Gesture-free playback applies only to the configured WebUI route. Permitted
+non-WebUI main-frame navigation tightens the setting before commit; commit and
+finish callbacks re-check the actual document URL. Externalized or blocked
+links and subframes do not change the loaded WebUI's permission. Popups retain
+the gesture requirement, and Android adds no microphone service or native TTS.
+
 Background session monitoring derives the session ID from the final
 `/session/{id}` path segments of a trusted WebUI URL, including deployments
 under a mount prefix. URL segments are split before decoding so IDs round-trip

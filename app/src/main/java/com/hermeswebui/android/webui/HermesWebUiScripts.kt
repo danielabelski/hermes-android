@@ -1407,4 +1407,21 @@ object HermesWebUiScripts {
             })();
         """.trimIndent()
     }
+
+    /**
+     * Proposed host signal, not a capture/playback implementation. Current WebUI does not
+     * consume it; a future consumer must stop existing capture/playback on foreground loss and
+     * require explicit re-arm. The flag also exposes state to a document still booting.
+     */
+    fun buildAppForegroundScript(active: Boolean): String {
+        return """
+            (function() {
+              var active = $active;
+              try { window.__hermesAppForegroundActive = active; } catch (_) {}
+              try {
+                window.dispatchEvent(new CustomEvent('hermes-app-foreground', { detail: { active: active } }));
+              } catch (_) {}
+            })();
+        """.trimIndent()
+    }
 }

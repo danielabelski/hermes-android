@@ -46,6 +46,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.browser.customtabs.CustomTabColorSchemeParams
@@ -108,6 +109,7 @@ import com.hermeswebui.android.security.ClientCertificateRequestSupport
 import com.hermeswebui.android.notification.HermesNotificationPresenter
 import com.hermeswebui.android.domain.ServerUrlValidator
 import com.hermeswebui.android.server.HermesServerProfileCoordinator
+import com.hermeswebui.android.server.SelectedServerNavigation
 import com.hermeswebui.android.domain.ShareIntentParser
 import com.hermeswebui.android.domain.TailscaleEndpointDetector
 import com.hermeswebui.android.ui.MainViewModel
@@ -117,6 +119,8 @@ import com.hermeswebui.android.ui.settings.SettingsScreen
 import com.hermeswebui.android.ui.settings.VpnLaunchAppOption
 import com.hermeswebui.android.ui.web.WebShell
 import com.hermeswebui.android.webui.HermesWebUiScripts
+import com.hermeswebui.android.webui.VoiceCaptureLifecycleGate
+import com.hermeswebui.android.webview.HermesMediaPlaybackPolicy
 import com.hermeswebui.android.webview.HermesWebViewConfigurator
 import com.hermeswebui.android.webview.HermesWebViewDownloadListener
 import com.hermeswebui.android.update.HermesAppUpdateCoordinator
@@ -189,7 +193,6 @@ class MainActivity : ComponentActivity() {
     private var urlPolicy = UrlPolicy(emptySet())
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private var pendingCameraCaptureUri: Uri? = null
-    private var pendingAudioPermissionRequest: PermissionRequest? = null
     private var pendingLocalNetworkPermissionAction: (() -> Unit)? = null
     private var pendingLocalNetworkPermissionDeniedAction: (() -> Unit)? = null
     private var viewportFixScriptHandler: ScriptHandler? = null
@@ -254,18 +257,23 @@ class MainActivity : ComponentActivity() {
         viewModel.dismissShareBanner()
     }
 
-    private val audioPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        val request = pendingAudioPermissionRequest ?: return@registerForActivityResult
-        pendingAudioPermissionRequest = null
-        if (granted && isTrustedPermissionOrigin(request.origin)) {
-            request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
-        } else {
-            request.deny()
-            if (!granted) {
+    private val audioPermissionLauncher: ActivityResultLauncher<String> =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            val userDenied = voiceCaptureGate.onRecordAudioPromptResult(granted) { request ->
+                isTrustedPermissionOrigin(request.origin)
+            }
+            if (userDenied) {
                 Toast.makeText(this, "Microphone permission denied", Toast.LENGTH_SHORT).show()
             }
         }
-    }
+
+    // WebUI owns existing capture/playback. This proposed host signal requires a WebUI consumer.
+    private val voiceCaptureGate: VoiceCaptureLifecycleGate<PermissionRequest> = VoiceCaptureLifecycleGate(
+        grantAudioCapture = { it.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) },
+        denyAudioCapture = { it.deny() },
+        launchRecordAudioPrompt = { audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
+        signalAppForeground = ::signalAppForegroundToWebUi
+    )
 
     private val localNetworkPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -379,7 +387,8 @@ class MainActivity : ComponentActivity() {
             viewModel = viewModel,
             serverUrlValidator = serverUrlValidator,
             onOpenInExternalBrowser = ::openInExternalBrowser,
-            onPerformServerProfileSwitch = ::performServerProfileSwitch
+            onPerformServerProfileSwitch = ::performServerProfileSwitch,
+            onRefreshConfiguredHermes = ::loadServerUrlWithVpnGuard
         )
         foregroundServiceCoordinator = HermesForegroundServiceCoordinator(
             context = this,
@@ -452,10 +461,12 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         activityVisible = true
+        voiceCaptureGate.onStart()
     }
 
     override fun onResume() {
         super.onResume()
+        voiceCaptureGate.onResume()
         if (::webView.isInitialized) {
             activityVisible = true
             viewModel.refreshFeatureFlagsFromRepository()
@@ -471,6 +482,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onPause() {
+        // Report host state first; stopping existing tracks requires WebUI support.
+        voiceCaptureGate.onPause()
         if (::webView.isInitialized) {
             viewModel.onAppBackgrounded()
             appUpdateCoordinator.stopPendingGitHubDownloadMonitor()
@@ -483,6 +496,7 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         activityVisible = false
+        voiceCaptureGate.onStop()
         appUpdateCoordinator.cancelAutomaticAppUpdateCheck()
         val state = viewModel.uiState.value
         foregroundServiceCoordinator.onActivityStopped(state, activityVisible)
@@ -851,8 +865,8 @@ class MainActivity : ComponentActivity() {
 
                 override fun onPermissionRequestCanceled(request: PermissionRequest?) {
                     super.onPermissionRequestCanceled(request)
-                    if (pendingAudioPermissionRequest == request) {
-                        pendingAudioPermissionRequest = null
+                    if (request != null) {
+                        voiceCaptureGate.onCaptureRequestCanceled(request)
                     }
                 }
 
@@ -888,7 +902,11 @@ class MainActivity : ComponentActivity() {
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                     val target = request?.url?.toString() ?: return true
-                    return handleMainWebViewNavigation(target)
+                    val handled = handleMainWebViewNavigation(target)
+                    if (!handled && request.isForMainFrame) {
+                        restrictMediaPlaybackBeforeNavigation(target)
+                    }
+                    return handled
                 }
 
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
@@ -1115,6 +1133,7 @@ class MainActivity : ComponentActivity() {
         if (flow != null) {
             // Move popup OAuth flows to the main frame so they are visible and interactive.
             rememberActiveMainFrameOAuth(flow)
+            restrictMediaPlaybackBeforeNavigation(target)
             webView.loadUrl(target)
             destroyPopup(popup)
             return true
@@ -1144,6 +1163,7 @@ class MainActivity : ComponentActivity() {
         if (startedFlow != null) {
             // Move popup OAuth flows to the main frame so they are visible and interactive.
             rememberActiveMainFrameOAuth(startedFlow)
+            restrictMediaPlaybackBeforeNavigation(url)
             webView.loadUrl(url)
             destroyPopup(popup)
             return
@@ -1227,7 +1247,13 @@ class MainActivity : ComponentActivity() {
             }
         }
         updateOAuthInFlowHost(url)
+        webView.settings.mediaPlaybackRequiresUserGesture =
+            !currentWebTrustPolicy().allowsGestureFreeMediaPlayback(url)
         viewModel.onPageStarted(url)
+    }
+
+    private fun restrictMediaPlaybackBeforeNavigation(target: String) {
+        HermesMediaPlaybackPolicy.beforeAllowedMainFrameNavigation(webView, target, currentWebTrustPolicy())
     }
 
     private fun completeOAuthReturnIfHermesPage(view: WebView?, url: String?) {
@@ -1260,20 +1286,11 @@ class MainActivity : ComponentActivity() {
     private fun handleWebViewPermissionRequest(request: PermissionRequest) {
         val requestedResources = request.resources?.toSet().orEmpty()
         val requestsAudio = requestedResources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)
-        val trustedOrigin = isTrustedPermissionOrigin(request.origin)
-        if (!requestsAudio || !trustedOrigin) {
-            request.deny()
-            return
-        }
-
-        if (hasRecordAudioPermission()) {
-            request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
-            return
-        }
-
-        pendingAudioPermissionRequest?.deny()
-        pendingAudioPermissionRequest = request
-        audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        voiceCaptureGate.onCaptureRequested(
+            request = request,
+            trustedAudioRequest = requestsAudio && isTrustedPermissionOrigin(request.origin),
+            hasRecordAudioPermission = hasRecordAudioPermission()
+        )
     }
 
     private fun requestLocalNetworkPermissionIfNeeded(
@@ -1608,6 +1625,7 @@ class MainActivity : ComponentActivity() {
 
     private fun applyHermesWebViewCompatibilityFixes(view: WebView?, url: String?) {
         if (view == null) return
+        HermesMediaPlaybackPolicy.onDocumentReady(view, currentWebTrustPolicy())
         val effectiveUrl = url ?: viewModel.uiState.value.currentUrl
         if (matchesConfiguredWebUiRoute(effectiveUrl)) {
             // Android WebView can report supported dynamic viewport units while computing them as 0px.
@@ -1646,6 +1664,7 @@ class MainActivity : ComponentActivity() {
                 null
             )
         }
+        voiceCaptureGate.onPageReady()
     }
 
     private fun isHardwareKeyboardAttached(): Boolean {
@@ -1665,6 +1684,19 @@ class MainActivity : ComponentActivity() {
         if (target == null) return
         target.evaluateJavascript(
             "window.__hermesAndroidHardwareKeyboard = ${isHardwareKeyboardAttached()};",
+            null
+        )
+    }
+
+    /** Dispatches the proposed host event; it does not itself stop existing capture or playback. */
+    private fun signalAppForegroundToWebUi(active: Boolean) {
+        if (!::webView.isInitialized || !matchesConfiguredWebUiRoute(webView.url)) return
+        val trustedOrigin = UrlOrigins.pageOrigin(viewModel.uiState.value.settings.serverUrl) ?: return
+        webView.evaluateJavascript(
+            HermesWebUiScripts.buildOriginGuardedRuntimeScript(
+                trustedOrigin,
+                HermesWebUiScripts.buildAppForegroundScript(active)
+            ),
             null
         )
     }
@@ -1802,7 +1834,10 @@ class MainActivity : ComponentActivity() {
             return
         }
         when (urlPolicy.navigationDecision(url)) {
-            NavigationDecision.ALLOW_IN_WEBVIEW -> webView.loadUrl(url)
+            NavigationDecision.ALLOW_IN_WEBVIEW -> {
+                restrictMediaPlaybackBeforeNavigation(url)
+                webView.loadUrl(url)
+            }
             NavigationDecision.OPEN_IN_EXTERNAL_BROWSER -> openInExternalBrowser(url)
             NavigationDecision.BLOCK -> Unit
         }
@@ -1810,6 +1845,7 @@ class MainActivity : ComponentActivity() {
 
     private fun loadOAuthCallbackInMainWebView(flow: OAuthPopupFlow, url: String) {
         oauthReturnNavigation.begin(flow)
+        restrictMediaPlaybackBeforeNavigation(url)
         webView.loadUrl(url)
     }
 
@@ -1873,11 +1909,12 @@ class MainActivity : ComponentActivity() {
         // Restore only trusted Hermes WebUI routes; fall back to the server root for
         // dashboard-origin pages and for stale non-WebUI URLs (e.g. OAuth provider pages
         // persisted by older builds mid-flow).
-        val startUrl = notificationUrl ?: if (lastLoadedUrl != null && matchesConfiguredWebUiRoute(lastLoadedUrl)) {
-            lastLoadedUrl
-        } else {
-            serverUrl
-        }
+        val startUrl = SelectedServerNavigation.startupUrl(
+            selectedServerUrl = serverUrl,
+            lastLoadedUrl = lastLoadedUrl,
+            notificationUrl = notificationUrl,
+            trustPolicy = currentWebTrustPolicy()
+        )
         if (shouldRequireVpnForServerUrl(serverUrl) && !isVpnTransportActive()) {
             queueVpnGuardedLoad(
                 serverUrl = serverUrl,
@@ -1963,14 +2000,15 @@ class MainActivity : ComponentActivity() {
 
         viewModel.switchServerProfile(profile.id)
         urlPolicy = UrlPolicy(viewModel.uiState.value.settings.allowedHosts)
-        installHermesWebUiDocumentStartFixes(webView, profile.url)
+        val targetUrl = SelectedServerNavigation.switchTargetUrl(profile)
+        installHermesWebUiDocumentStartFixes(webView, targetUrl)
         requestLocalNetworkPermissionIfNeeded(
-            url = profile.url,
+            url = targetUrl,
             onGranted = {
-                loadServerUrlWithVpnGuard(profile.url)
+                loadServerUrlWithVpnGuard(targetUrl)
             },
             onDenied = {
-                loadServerUrlWithVpnGuard(profile.url)
+                loadServerUrlWithVpnGuard(targetUrl)
             }
         )
         viewModel.closeSettings()
@@ -2081,6 +2119,7 @@ class MainActivity : ComponentActivity() {
         if (!shouldRequireVpnForServerUrl(url) || isVpnTransportActive()) {
             pendingVpnGuardUrl = null
             stopVpnReconnectWaitLoop()
+            restrictMediaPlaybackBeforeNavigation(url)
             webView.loadUrl(url)
             return
         }
@@ -2093,7 +2132,11 @@ class MainActivity : ComponentActivity() {
 
     private fun refreshConfiguredHermes(closeSettings: Boolean = false) {
         val state = viewModel.uiState.value
-        val targetUrl = state.currentUrl.takeIf(::matchesConfiguredWebUiRoute) ?: state.settings.serverUrl
+        val targetUrl = SelectedServerNavigation.reconnectUrl(
+            currentUrl = state.currentUrl,
+            selectedServerUrl = state.settings.serverUrl,
+            trustPolicy = currentWebTrustPolicy()
+        )
         if (targetUrl.isBlank()) {
             viewModel.openSettings()
             return

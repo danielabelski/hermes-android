@@ -29,7 +29,8 @@ class HermesServerProfileCoordinator(
     private val viewModel: MainViewModel,
     private val serverUrlValidator: ServerUrlValidator,
     private val onOpenInExternalBrowser: (String) -> Unit,
-    private val onPerformServerProfileSwitch: (ServerProfile) -> Unit
+    private val onPerformServerProfileSwitch: (ServerProfile) -> Unit,
+    private val onRefreshConfiguredHermes: (String) -> Unit
 ) {
     private var serverValidationJob: Job? = null
 
@@ -141,13 +142,25 @@ class HermesServerProfileCoordinator(
             trimmedUrl,
             onFailure = { result ->
                 showServerValidationRecoveryDialog(trimmedUrl, result, "Save changes") {
-                    viewModel.updateServerProfile(profileId, trimmedName, trimmedUrl)
+                    updateProfileAndFollowCurrent(profileId, trimmedName, trimmedUrl)
                     Toast.makeText(context, "Profile updated (readiness check skipped)", Toast.LENGTH_LONG).show()
                 }
             }
         ) {
-            viewModel.updateServerProfile(profileId, trimmedName, trimmedUrl)
+            updateProfileAndFollowCurrent(profileId, trimmedName, trimmedUrl)
             Toast.makeText(context, "Profile updated", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** Editing the Current profile's URL reloads the WebView on the new server. */
+    private fun updateProfileAndFollowCurrent(profileId: String, name: String, url: String) {
+        val previous = settingsRepository.getActiveProfile()?.takeIf { it.id == profileId }
+        viewModel.updateServerProfile(profileId, name, url)
+        if (previous != null) viewModel.refreshSettingsFromRepository()
+        when (SelectedServerNavigation.profileEditAction(previous, url)) {
+            ServerProfileEditAction.NONE -> Unit
+            ServerProfileEditAction.REFRESH -> onRefreshConfiguredHermes(url)
+            ServerProfileEditAction.SWITCH -> settingsRepository.getActiveProfile()?.let(onPerformServerProfileSwitch)
         }
     }
 
@@ -204,7 +217,13 @@ class HermesServerProfileCoordinator(
                 )
             )
 
-            if (result.isReady) {
+            val action = SelectedServerNavigation.switchAction(
+                isReady = result.isReady,
+                reachable = reachable,
+                status = result.status,
+                authPromptSilenced = settingsRepository.isAuthPromptSilencedForUrl(newProfile.url)
+            )
+            if (action == ServerSwitchAction.CONFIRM_SWITCH) {
                 val message = "${newProfile.name} is reachable. Switch to this server now?"
                 viewModel.setServerValidationState(
                     isChecking = false,
@@ -215,8 +234,8 @@ class HermesServerProfileCoordinator(
                 return@launch
             }
 
-            if (reachable && result.status == HermesApiClient.ServerReadinessStatus.AUTH_REQUIRED) {
-                if (settingsRepository.isAuthPromptSilencedForUrl(newProfile.url)) {
+            if (action != ServerSwitchAction.BLOCK) {
+                if (action == ServerSwitchAction.SWITCH_NOW) {
                     DiagnosticsLogger.record(
                         context,
                         "server_switch_auth_required_auto_proceed_silenced",

@@ -32,7 +32,7 @@ object ServerProfileRules {
         return null
     }
 
-    private fun normalizeUrl(url: String): String {
+    fun normalizeUrl(url: String): String {
         return url.trim().trimEnd('/').lowercase(Locale.US)
     }
 }

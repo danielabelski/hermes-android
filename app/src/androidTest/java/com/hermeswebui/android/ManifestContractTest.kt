@@ -3,9 +3,11 @@ package com.hermeswebui.android
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.filters.SdkSuppress
 import com.google.common.truth.Truth.assertThat
 import com.hermeswebui.android.background.HermesDebugLoggingService
 import com.hermeswebui.android.background.HermesReconnectService
@@ -54,6 +56,7 @@ class ManifestContractTest {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 33)
     fun internalServicesAndFileProviderAreNotExported() {
         val reconnectService = packageManager.getServiceInfo(
             ComponentName(context, HermesReconnectService::class.java),
@@ -72,6 +75,22 @@ class ManifestContractTest {
         assertThat(debugService.exported).isFalse()
         assertThat(provider.exported).isFalse()
         assertThat(provider.grantUriPermissions).isTrue()
+    }
+
+    @Test
+    @SdkSuppress(minSdkVersion = 33)
+    fun noServiceCanKeepMicrophoneCaptureAliveInTheBackground() {
+        // This pins service ownership, not whether WebUI ends an already-granted track.
+        val services = packageManager.getPackageInfo(
+            context.packageName,
+            PackageManager.PackageInfoFlags.of(PackageManager.GET_SERVICES.toLong())
+        ).services.orEmpty()
+
+        assertThat(services).isNotEmpty()
+        services.forEach { service ->
+            assertThat(service.foregroundServiceType and ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+                .isEqualTo(0)
+        }
     }
 
     private fun resolveActivity(intent: Intent): String? {
